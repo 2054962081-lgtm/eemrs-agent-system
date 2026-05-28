@@ -1,0 +1,12 @@
+:root {
+  --color-primary: #1d74d6;
+  --color-primary-dark: #1557a8;
+  --color-accent: #1bb8a9;
+  --color-bg: #f5f7fb;
+  --color-text: #1f2f46;
+  --color-muted: #6b778c;
+  --color-border: #e4eaf2;
+  --color-card: #ffffff;
+  --shadow-card: 0 12px 32px rgba(31, 47, 70, 0.08);
+  --radius-card: 12px;
+}

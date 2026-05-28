@@ -1,0 +1,12 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: eemrs-agent-server
+
+agent:
+  ollama:
+    base-url: http://localhost:11434
+    model: qwen3-vl:8b
+    timeout-seconds: 120

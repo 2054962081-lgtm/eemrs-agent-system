@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.text.*?>
+<?import java.lang.*?>
+<?import java.util.*?>
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane prefHeight="500.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.DoctorControllers.DoctorIndexController">
+   <children>
+      <Button fx:id="jiezhen" layoutX="359.0" layoutY="101.0" mnemonicParsing="false" onAction="#handleClickJiezhen" prefHeight="40.0" prefWidth="167.0" text="接诊">
+         <font>
+            <Font size="20.0" />
+         </font>
+      </Button>
+      <Button fx:id="search" layoutX="359.0" layoutY="210.0" mnemonicParsing="false" onAction="#handleClickSearch" prefHeight="40.0" prefWidth="167.0" text="病人记录查询">
+         <font>
+            <Font size="20.0" />
+         </font>
+      </Button>
+      <Button fx:id="back" layoutX="793.0" layoutY="446.0" mnemonicParsing="false" onAction="#gotoBack" prefHeight="40.0" prefWidth="93.0" text="退出">
+         <font>
+            <Font size="14.0" />
+         </font>
+      </Button>
+      <Button fx:id="modify" layoutX="359.0" layoutY="326.0" mnemonicParsing="false" onAction="#handleClickModify" prefHeight="40.0" prefWidth="167.0" text="修改密码">
+         <font>
+            <Font size="20.0" />
+         </font>
+      </Button>
+   </children>
+</AnchorPane>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.text.*?>
+<?import java.lang.*?>
+<?import java.util.*?>
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane prefHeight="500.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.PatientControllers.PatientCompleteController">
+   <children>
+      <Label layoutX="322.0" layoutY="46.0" text="病人基本信息完善表">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <Label layoutX="65.0" layoutY="122.0" prefHeight="27.0" prefWidth="77.0" text="姓    名">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="274.0" layoutY="122.0" prefHeight="27.0" prefWidth="62.0" text="性   别">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <TextField fx:id="name" editable="false" layoutX="156.0" layoutY="122.0" prefHeight="27.0" prefWidth="101.0" />
+      <TextField fx:id="sex" layoutX="360.0" layoutY="122.0" prefHeight="27.0" prefWidth="107.0" />
+      <Label layoutX="62.0" layoutY="359.0" text="医保卡号">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="58.0" layoutY="195.0" text="出生日期">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="274.0" layoutY="195.0" text="民  族">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="375.0" layoutY="277.0" text="家庭地址">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="395.0" layoutY="359.0" prefHeight="27.0" prefWidth="84.0" text="e-mail">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="486.0" layoutY="195.0" text="联系电话">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="58.0" layoutY="277.0" text="身份证号">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <Label layoutX="507.0" layoutY="122.0" prefHeight="27.0" prefWidth="62.0" text="年  龄">
+         <font>
+            <Font size="21.0" />
+         </font>
+      </Label>
+      <TextField fx:id="age" layoutX="593.0" layoutY="122.0" prefHeight="27.0" prefWidth="202.0" />
+      <Button fx:id="back" layoutX="779.0" layoutY="452.0" mnemonicParsing="false" onAction="#handleClickBack" prefHeight="32.0" prefWidth="107.0" text="返回">
+         <font>
+            <Font size="19.0" />
+         </font>
+      </Button>
+      <Button fx:id="submit" layoutX="341.0" layoutY="436.0" mnemonicParsing="false" onAction="#handleClickSubmit" prefHeight="32.0" prefWidth="157.0" text="提交">
+         <font>
+            <Font size="19.0" />
+         </font>
+      </Button>
+      <TextField fx:id="birthdate" layoutX="156.0" layoutY="195.0" prefHeight="27.0" prefWidth="101.0" />
+      <TextField fx:id="idNumber" editable="false" layoutX="156.0" layoutY="277.0" prefHeight="27.0" prefWidth="209.0" />
+      <TextField fx:id="address" layoutX="479.0" layoutY="277.0" prefHeight="27.0" prefWidth="319.0" />
+      <TextField fx:id="nation" layoutX="358.0" layoutY="195.0" prefHeight="27.0" prefWidth="107.0" />
+      <TextField fx:id="telephone" layoutX="593.0" layoutY="195.0" prefHeight="27.0" prefWidth="202.0" />
+      <TextField fx:id="patientID" layoutX="156.0" layoutY="359.0" prefHeight="27.0" prefWidth="209.0" />
+      <TextField fx:id="mail" layoutX="479.0" layoutY="359.0" prefHeight="27.0" prefWidth="319.0" />
+   </children>
+</AnchorPane>

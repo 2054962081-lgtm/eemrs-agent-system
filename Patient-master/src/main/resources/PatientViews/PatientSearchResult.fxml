@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import java.lang.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="500.0" prefWidth="900.0" stylesheets="" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.PatientControllers.PatientSearchResultController">
+   <children>
+      <Button fx:id="back2" layoutX="788.0" layoutY="31.0" mnemonicParsing="false" onAction="#gotoBack2" prefHeight="34.0" prefWidth="96.0" text="返回查询界面" />
+      <Label layoutX="105.0" layoutY="34.0" prefHeight="28.0" prefWidth="66.0" text="日期">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Label>
+      <Label layoutX="316.0" layoutY="34.0" prefHeight="28.0" prefWidth="29.0" text="至">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Label>
+      <TextField fx:id="beginDate2" editable="false" layoutX="182.0" layoutY="35.0" prefHeight="27.0" prefWidth="107.0" />
+      <TextField fx:id="endDate2" editable="false" layoutX="366.0" layoutY="35.0" prefHeight="27.0" prefWidth="107.0" />
+      <Label layoutX="519.0" layoutY="34.0" prefHeight="28.0" prefWidth="66.0" text="科室">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Label>
+      <TextField fx:id="department2" editable="false" layoutX="591.0" layoutY="35.0" prefHeight="27.0" prefWidth="107.0" />
+      <TableView fx:id="patientTable" layoutX="-1.0" layoutY="110.0" prefHeight="391.0" prefWidth="906.0">
+        <columns>
+
+          <TableColumn fx:id="orderCol" prefWidth="87.0" text="序号" />
+            <TableColumn fx:id="departmentCol" prefWidth="85.0" text="部门" />
+            <TableColumn fx:id="dateCol" prefWidth="117.0" text="日期" />
+            <TableColumn fx:id="doctorCol" prefWidth="100.0" text="医生" />
+            <TableColumn fx:id="medicineCol" minWidth="0.0" prefWidth="127.0" text="处方用药" />
+            <TableColumn fx:id="descriptionCol" prefWidth="288.0" text="诊断记录" />
+            <TableColumn fx:id="verifyCol" prefWidth="101.0" text="验证签名" />
+
+        </columns>
+      </TableView>
+   </children>
+</AnchorPane>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.text.*?>
+<?import javafx.collections.*?>
+<?import javafx.scene.control.*?>
+<?import java.lang.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.collections.FXCollections?>
+
+<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="500.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.Main.MainController">
+   <children>
+      <Button fx:id="login" layoutX="429.0" layoutY="355.0" mnemonicParsing="false" onAction="#handleClickLogIn" prefHeight="39.0" prefWidth="144.0" text="登录" textFill="#010a06">
+         <font>
+            <Font size="15.0" />
+         </font></Button>
+      <Label layoutX="167.0" layoutY="75.0" prefHeight="17.0" prefWidth="216.0" text="Welcome" textFill="#4d114c">
+         <font>
+            <Font size="47.0" />
+         </font></Label>
+      <Label layoutX="264.0" layoutY="187.0" prefHeight="59.0" prefWidth="124.0" text=" 身份证号 :" textAlignment="RIGHT" textOverrun="CENTER_WORD_ELLIPSIS" wrapText="true">
+         <font>
+            <Font size="18.0" />
+         </font></Label>
+      <Label layoutX="268.0" layoutY="269.0" prefHeight="39.0" prefWidth="116.0" text=" 密      码 :">
+         <font>
+            <Font size="18.0" />
+         </font></Label>
+      <TextField fx:id="idNumber" layoutX="401.0" layoutY="203.0" prefHeight="27.0" prefWidth="200.0" />
+      <PasswordField fx:id="passwordField" layoutX="401.0" layoutY="275.0" prefHeight="27.0" prefWidth="200.0" />
+      <Button fx:id="register" layoutX="23.0" layoutY="459.0" mnemonicParsing="false" onAction="#handleClickSubmitRegister" text="还没有账号？点击这里注册" />
+      <Button fx:id="logout" layoutX="782.0" layoutY="447.0" mnemonicParsing="false" onAction="#handleClickLogOut" prefHeight="39.0" prefWidth="98.0" text="退出">
+         <font>
+            <Font size="15.0" />
+         </font>
+      </Button>
+
+
+
+   </children>
+</AnchorPane>

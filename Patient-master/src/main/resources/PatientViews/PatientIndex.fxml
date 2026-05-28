@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.image.*?>
+<?import javafx.scene.web.*?>
+<?import java.lang.*?>
+<?import java.util.*?>
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane styleClass="" prefHeight="500.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.PatientControllers.PatientIndexController">
+   <children>
+      <Button fx:id="gotoComplete" layoutX="354.0" layoutY="228.0" mnemonicParsing="false" onAction="#handleClickGoToComplete" prefHeight="44.0" prefWidth="210.0" text="基本信息完善" />
+      <Button fx:id="gotoSearch" layoutX="354.0" layoutY="135.0" mnemonicParsing="false" onAction="#handleClickGoToSearch" prefHeight="51.0" prefWidth="210.0" text="查询就诊记录" />
+      <Button fx:id="gotoModify" layoutX="354.0" layoutY="39.0" mnemonicParsing="false" onAction="#handleClickGoToModify" prefHeight="51.0" prefWidth="210.0" text="修改密码" />
+      <Button fx:id="logout" layoutX="763.0" layoutY="393.0" mnemonicParsing="false" onAction="#handleClickLogOut" prefHeight="37.0" prefWidth="87.0" text="退出" />
+      <Button fx:id="guahao" layoutX="354.0" layoutY="311.0" mnemonicParsing="false" onAction="#handleClickGuahao" prefHeight="51.0" prefWidth="210.0" text="挂号" />
+   </children>
+</AnchorPane>

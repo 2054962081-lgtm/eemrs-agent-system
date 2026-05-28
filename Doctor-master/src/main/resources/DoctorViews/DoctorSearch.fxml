@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.text.*?>
+<?import java.lang.*?>
+<?import java.util.*?>
+<?import javafx.scene.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane prefHeight="500.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lilin.client.DoctorControllers.DoctorSearchController">
+   <children>
+      <Button fx:id="search" layoutX="429.0" layoutY="343.0" mnemonicParsing="false" onAction="#handleClickSearch" prefHeight="44.0" prefWidth="182.0" text="查询">
+         <font>
+            <Font size="22.0" />
+         </font>
+      </Button>
+      <Label layoutX="229.0" layoutY="77.0" prefHeight="29.0" prefWidth="102.0" text="就诊日期">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <Label layoutX="229.0" layoutY="168.0" prefHeight="29.0" prefWidth="102.0" text="病人年龄">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <Label layoutX="229.0" layoutY="250.0" prefHeight="29.0" prefWidth="110.0" text="病人姓名">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <DatePicker fx:id="beginDate" layoutX="351.0" layoutY="78.0" prefHeight="27.0" prefWidth="137.0" />
+      <DatePicker fx:id="endDate" layoutX="547.0" layoutY="78.0" prefHeight="27.0" prefWidth="137.0" />
+      <Label layoutX="505.0" layoutY="77.0" prefHeight="29.0" prefWidth="29.0" text="至">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <TextField fx:id="beginAge" layoutX="418.0" layoutY="169.0" prefHeight="27.0" prefWidth="64.0" />
+      <TextField fx:id="patientName" layoutX="413.0" layoutY="251.0" prefHeight="27.0" prefWidth="214.0" />
+      <Label layoutX="506.0" layoutY="167.0" prefHeight="29.0" prefWidth="29.0" text="-">
+         <font>
+            <Font size="24.0" />
+         </font>
+      </Label>
+      <TextField fx:id="endAge" layoutX="535.0" layoutY="168.0" prefHeight="27.0" prefWidth="64.0" />
+      <Button fx:id="back" layoutX="750.0" layoutY="442.0" mnemonicParsing="false" onAction="#handleClickBack" prefHeight="44.0" prefWidth="137.0" text="返回上一页">
+         <font>
+            <Font size="18.0" />
+         </font>
+      </Button>
+   </children>
+</AnchorPane>

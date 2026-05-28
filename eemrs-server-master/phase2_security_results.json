@@ -1,0 +1,165 @@
+{
+  "accounts": {
+    "PATIENT_A": "1798***5001",
+    "PATIENT_B": "1798***5002",
+    "DOCTOR_A": "2798***5001",
+    "DOCTOR_B": "2798***5002"
+  },
+  "department": "内科",
+  "results": [
+    {
+      "name": "register PATIENT_A",
+      "expected": "200",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=1798***5001, success=True"
+    },
+    {
+      "name": "register PATIENT_B",
+      "expected": "200",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=1798***5002, success=True"
+    },
+    {
+      "name": "register DOCTOR_A",
+      "expected": "200",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=2798***5001, success=True"
+    },
+    {
+      "name": "register DOCTOR_B",
+      "expected": "200",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=2798***5002, success=True"
+    },
+    {
+      "name": "login PATIENT_A",
+      "expected": "200 JWT",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=1798***5001, jwtKeys=['exp', 'iat', 'idNumber', 'role', 'sub', 'type']"
+    },
+    {
+      "name": "login PATIENT_B",
+      "expected": "200 JWT",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=1798***5002, jwtKeys=['exp', 'iat', 'idNumber', 'role', 'sub', 'type']"
+    },
+    {
+      "name": "login DOCTOR_A",
+      "expected": "200 JWT",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=2798***5001, jwtKeys=['department', 'exp', 'iat', 'idNumber', 'role', 'sub', 'type']"
+    },
+    {
+      "name": "login DOCTOR_B",
+      "expected": "200 JWT",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "id=2798***5002, jwtKeys=['department', 'exp', 'iat', 'idNumber', 'role', 'sub', 'type']"
+    },
+    {
+      "name": "401 no token medical records",
+      "expected": "401",
+      "actual": "401",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "patient cannot access waiting list",
+      "expected": "403",
+      "actual": "403",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor cannot update patient profile",
+      "expected": "403",
+      "actual": "403",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "patient A cannot query patient B records",
+      "expected": "403 or no B data",
+      "actual": "403",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "patient A cannot appoint for patient B",
+      "expected": "403",
+      "actual": "403",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A cannot query as doctor B",
+      "expected": "403",
+      "actual": "403",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A cannot create record as doctor B",
+      "expected": "403 before signature check",
+      "actual": "400",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "name": "patient query department doctors",
+      "expected": "200",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "patient A create appointment",
+      "expected": "200 success=true",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A query waiting list",
+      "expected": "200 contains patient A",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A accept patient A",
+      "expected": "200 success=true",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A create valid medical record",
+      "expected": "200 success=true",
+      "actual": "200",
+      "status": "PASS",
+      "detail": "signatureSource=Doctor-master SM2KeyPair"
+    },
+    {
+      "name": "patient A query own records",
+      "expected": "200 success=true list, no patient B data",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "doctor A query own records",
+      "expected": "200 success=true list, no doctor B data",
+      "actual": "200",
+      "status": "PASS",
+      "detail": ""
+    }
+  ]
+}

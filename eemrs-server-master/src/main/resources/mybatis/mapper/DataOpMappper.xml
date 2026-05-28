@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liu.eemrsserver.mapper.DataOpMappper">
+    <select id="getDocNameByDepartment" resultType="com.liu.eemrsserver.domain.DoctorInfo">
+        select * from tb_doctor where department=#{department}
+    </select>
+    <select id="getDocInfoByHashCode" resultType="com.liu.eemrsserver.domain.DoctorInfo">
+        select * from tb_doctor where id_hash_code=#{hash}
+    </select>
+    <select id="getCounterByIdHash" resultType="string">
+        select counter from tb_patient where id_hash_code=#{hash}
+    </select>
+
+    <update id="updateCounter" >
+        update tb_patient
+        set counter = #{counter}
+        where id_hash_code=#{hash}
+    </update>
+    <insert id="insert">
+        insert into tb_medical_infor(department,
+                                     medication,
+                                     condition_description,
+                                     cost,
+                                     visit_time,
+                                     patient_name,
+                                     patient_id_number,
+                                     patient_id_hash_code,
+                                     age,
+                                     doctor_name,
+                                     doctor_id_number,
+                                     doctor_id_hash_code,
+                                     d_pk,
+                                     signature,
+                                     gender)
+        values (#{department},
+                #{medication},
+                #{conditionDescription},
+                #{cost},
+                #{visitTime},
+                #{patientName},
+                #{patientIdNumber},
+                #{patientIdHashCode},
+                #{age},
+                #{doctorName},
+                #{doctorIdNumber},
+                #{doctorIdHashCode},
+                #{dPk},
+                #{signature},
+                #{gender})
+    </insert>
+    <select id="queryByCondition" resultType="com.liu.eemrsserver.domain.VisitInfo">
+        select * from tb_medical_infor
+        <trim prefix="where" suffixOverrides="and">
+            <if test="timeInterval!=null">
+                visit_time between #{timeInterval.key} and #{timeInterval.value} and
+            </if>
+            <if test="ageInterval!=null">
+                age between #{ageInterval.key} and #{ageInterval.value} and
+            </if>
+            <if test="pids!=null">
+                patient_id_hash_code in <foreach open="(" collection="pids" item="hash" separator="," close=")">#{hash}</foreach> and
+            </if>
+            <if test="doctorIdNumber!=null">
+                doctor_id_hash_code=#{doctorIdNumber} and
+            </if>
+            <if test="department!=null">
+                department=#{department} and
+            </if>
+            <if test="doctorName!=null">
+                doctor_name=#{doctorName} and
+            </if>
+
+        </trim>
+    </select>
+</mapper>

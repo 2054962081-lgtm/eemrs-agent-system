@@ -1,0 +1,147 @@
+电子医疗系统前端运行与测试账号示例
+
+一、当前前端运行方式
+
+1. 启动后端 SpringBoot 服务
+
+进入后端目录：
+
+    cd eemrs-server-master
+
+编译：
+
+    mvn -q -DskipTests compile
+
+启动：
+
+    mvn spring-boot:run
+
+终止：taskkill /PID 34544 /F
+
+2. 启动前端 Vue 服务
+
+进入前端目录：
+
+    cd frontend-vue
+
+启动开发服务：
+
+    npm run dev
+
+
+二、患者注册示例
+
+在注册页面选择“患者”。
+
+示例信息如下：
+
+    账号类型：患者
+    姓名：测试患者A
+    身份证号：110101199001010001
+    密码：123456
+
+
+三、医生注册示例
+
+在注册页面选择“医生”。
+
+示例信息如下：
+
+    账号类型：医生
+    姓名：测试医生A
+    身份证号：110101199001010101
+    密码：123456
+    科室：内科
+
+
+四、建议再准备一组越权测试账号
+
+患者 B：
+
+    账号类型：患者
+    姓名：测试患者B
+    身份证号：110101199001010002
+    密码：123456
+
+医生 B：
+
+    账号类型：医生
+    姓名：测试医生B
+    身份证号：110101199001010102
+    密码：123456
+    科室：内科
+
+用途：
+1. 测试患者 A 是否无法查询患者 B 的病历；
+2. 测试医生 A 是否无法伪造医生 B 的身份；
+3. 测试前端路由守卫和后端 JWT 权限是否正常。
+
+
+八、常见问题排查
+
+1. 前端注册/登录报 502
+
+优先检查后端 8080 是否监听：
+
+    netstat -ano | findstr :8080
+
+如果没有 LISTENING，说明 REST 后端没启动。
+
+2. 后端只显示“等待连接”
+
+这通常说明旧 Socket 服务 8887 在等待连接，不代表 REST 服务 8080 启动成功。
+必须看到 Tomcat started on port(s): 8080。
+
+3. 登录成功但访问业务接口 401
+
+检查浏览器 Network：
+请求头中是否存在：
+
+    Authorization: Bearer <token>
+
+4. 患者或医生访问页面被拦截
+
+检查 localStorage 中保存的 role 是否正确：
+患者应为：
+
+    PATIENT
+
+医生应为：
+
+    DOCTOR
+
+5. 写病历失败
+
+重点检查：
+1. doctorIdNumber 是否等于当前医生 token 中的身份证号；
+2. patientIdNumber 是否为已挂号/已接诊患者；
+3. dPk 和 signature 是否是合法 SM2 签名数据；
+4. 前端字段名是否与后端 DTO 一致。
+
+九、建议测试顺序
+
+推荐按以下顺序测试：
+
+1. 启动后端；
+2. 启动前端；
+3. 注册患者 A；
+4. 注册医生 A；
+5. 患者 A 登录；
+6. 患者 A 挂号；
+7. 医生 A 登录；
+8. 医生 A 查看候诊列表；
+9. 医生 A 接诊患者 A；
+10. 医生 A 写病历；
+cd "D:\各类文件管理\研究生学习\研究\电子医疗系统\代码\eemrs-server-master"
+
+javac -cp "target/classes;..\gmhelper-master\target\classes;%USERPROFILE%\.m2\repository\org\bouncycastle\bcprov-jdk15on\1.68\bcprov-jdk15on-1.68.jar" scripts\GenerateSm2Signature.java
+
+java -cp "scripts;target/classes;..\gmhelper-master\target\classes;%USERPROFILE%\.m2\repository\org\bouncycastle\bcprov-jdk15on\1.68\bcprov-jdk15on-1.68.jar" GenerateSm2Signature "患者主诉头痛三天" "..\Doctor-master\SM2KeyPair\ec.x509.pub.der" "..\Doctor-master\SM2KeyPair\ec.pkcs8.pri.der"
+11. 患者 A 查询病历；
+12. 医生 A 查询病历；
+13. 测试患者/医生页面权限隔离。
+
+十、备注
+
+以上身份证号、姓名和密码均为本地开发测试示例，不应作为真实系统账号使用。
+正式系统中不应使用真实身份证号做公开测试，也不应在前端代码中写入真实 token、私钥或签名数据。

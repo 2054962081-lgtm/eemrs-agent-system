@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+target/
+out/
+build/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-local.properties
+*.local.yml
+*.local.yaml
+*.local.properties
+
+# Project-local runtime configs containing local database credentials or key material
+eemrs-server-master/src/main/resources/application.yml
+eemrs-server-master/src/main/resources/a.properties
+Doctor-master/src/main/resources/application.yml
+Patient-master/src/main/resources/application.yml
+
+# Local credentials and generated key material
+SM2KeyPair/
+SM2KeyPair.backup-*/
+*.key
+*.pem
+*.der
+*.pri
+*.p12
+*.pfx
+*.jks
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
