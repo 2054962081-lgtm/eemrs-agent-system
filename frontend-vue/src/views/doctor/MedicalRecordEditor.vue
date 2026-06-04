@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageContainer from '../../components/PageContainer.vue'
 import DataCard from '../../components/DataCard.vue'
+import MedicalRecordDraftViewer from '../../components/doctor/MedicalRecordDraftViewer.vue'
 import { createMedicalRecord } from '../../api/medicalRecord'
 import type { PatientInfo } from '../../api/types'
 import { useAuthStore } from '../../stores/auth'
@@ -73,8 +74,14 @@ async function submit() {
 
 <template>
   <PageContainer>
-    <h2 class="page-title">病历书写</h2>
-    <p class="page-subtitle">医生身份证号和科室优先来自登录态，SM2 签名信息保留为高级输入区。</p>
+    <div class="toolbar">
+      <div>
+        <h2 class="page-title">病历书写</h2>
+        <p class="page-subtitle">预问诊病历草稿仅供接诊参考，不会自动填入或覆盖医生录入内容。</p>
+      </div>
+      <MedicalRecordDraftViewer :patient-id="patient.idNumber || String(route.params.patientId)" />
+    </div>
+
     <DataCard title="病历信息">
       <el-form :model="form" label-width="130px">
         <el-row :gutter="16">
