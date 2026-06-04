@@ -24,7 +24,7 @@ const auth = useAuthStore()
       <DataCard title="病历/报告" subtitle="查询自己的就诊记录与报告信息">
         <el-button :icon="Document" @click="router.push('/patient/records')">查询记录</el-button>
       </DataCard>
-      <DataCard title="AI 预问诊" subtitle="输入症状并获取本地大模型预问诊回复">
+      <DataCard title="AI 预问诊" subtitle="选择快速或深度问诊，获取本地大模型预问诊回复">
         <el-button :icon="ChatDotRound" @click="router.push('/patient/pre-consultation')">开始问诊</el-button>
       </DataCard>
     </div>

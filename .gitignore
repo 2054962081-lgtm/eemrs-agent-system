@@ -23,6 +23,12 @@ logs/
 application-local.yml
 application-local.yaml
 application-local.properties
+application-secret.yml
+application-secret.yaml
+application-secret.properties
+application-prod.yml
+application-prod.yaml
+application-prod.properties
 *.local.yml
 *.local.yaml
 *.local.properties
@@ -55,3 +61,26 @@ desktop.ini
 *.bak
 *.swp
 *.swo
+tmp/
+temp/
+__pycache__/
+*.py[cod]
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Archives
+*.zip
+*.rar
+
+# Evaluation rerun scratch outputs
+evaluation/data/medical_agent_test_cases_ext006_refined.jsonl
+evaluation/data/medical_agent_test_cases_extended_failed21_refined.jsonl
+evaluation/reports/eval_report_20*.json
+evaluation/reports/eval_report_20*.csv
+evaluation/reports/extended_special_eval_scored_20*.xlsx
+evaluation/reports/failed_21_diagnosis_*.txt
+evaluation/reports/pre_consultation_eval_results_*.xlsx
+evaluation/reports/pre_consultation_eval_scored_results_*.xlsx

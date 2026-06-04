@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS agent_medical_record_draft (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    patient_id BIGINT NULL,
+    patient_id_number VARCHAR(64) NULL,
+    session_id VARCHAR(100) NULL,
+    consultation_mode VARCHAR(20) NOT NULL DEFAULT 'deep',
+    source_type VARCHAR(50) NOT NULL DEFAULT 'DEEP_PRE_CONSULTATION',
+    chief_complaint VARCHAR(1000) NULL,
+    present_illness_history TEXT NULL,
+    recommended_department VARCHAR(255) NULL,
+    urgency VARCHAR(50) NULL,
+    consultation_summary LONGTEXT NULL,
+    record_json LONGTEXT NOT NULL,
+    raw_model_reply LONGTEXT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+    created_by VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted TINYINT NOT NULL DEFAULT 0,
+    INDEX idx_agent_draft_patient_mode_deleted_created (patient_id, consultation_mode, deleted, created_at),
+    INDEX idx_agent_draft_patient_id_number_created (patient_id_number, consultation_mode, deleted, created_at),
+    INDEX idx_agent_draft_session (session_id)
+);
