@@ -65,6 +65,7 @@ tmp/
 temp/
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Local database files
 *.db
@@ -84,3 +85,13 @@ evaluation/reports/extended_special_eval_scored_20*.xlsx
 evaluation/reports/failed_21_diagnosis_*.txt
 evaluation/reports/pre_consultation_eval_results_*.xlsx
 evaluation/reports/pre_consultation_eval_scored_results_*.xlsx
+evaluation/reports/rag_ab_test_progress.json
+evaluation/reports/rag_ab_test_cache.json
+evaluation/reports/*stdout_latest.txt
+*partial*
+*checkpoint*
+
+# Local vector database and Docker volumes
+volumes/
+milvus/volumes/
+docker/volumes/

@@ -37,3 +37,19 @@ llm:
   fallback:
     enabled: ${LLM_FALLBACK_ENABLED:false}
     fallback-provider: ${LLM_FALLBACK_PROVIDER:ollama}
+
+rag:
+  enabled: ${RAG_ENABLED:true}
+  service-url: ${RAG_SERVICE_URL:http://localhost:18080}
+  retrieve-path: ${RAG_RETRIEVE_PATH:/rag/retrieve}
+  timeout-ms: ${RAG_TIMEOUT_MS:3000}
+  top-k: ${RAG_TOP_K:8}
+  max-context-chars: ${RAG_MAX_CONTEXT_CHARS:3000}
+  include-doc-types:
+    - red_flag
+    - symptom_inquiry
+    - special_population
+    - department_triage
+    - medical_record_template
+  fail-open: ${RAG_FAIL_OPEN:true}
+  debug-log: ${RAG_DEBUG_LOG:true}

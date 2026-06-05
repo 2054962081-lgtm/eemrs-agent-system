@@ -6,6 +6,10 @@ import com.liu.eemrsagent.llm.LlmClientFactory;
 import com.liu.eemrsagent.llm.LlmException;
 import com.liu.eemrsagent.llm.LlmMessage;
 import com.liu.eemrsagent.llm.LlmProviderType;
+import com.liu.eemrsagent.rag.RagContextFormatter;
+import com.liu.eemrsagent.rag.RagPromptBuilder;
+import com.liu.eemrsagent.rag.RagProperties;
+import com.liu.eemrsagent.rag.RagRetrievalClient;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -15,9 +19,23 @@ import java.util.List;
 public class PreConsultationService {
 
     private final LlmClientFactory llmClientFactory;
+    private final RagRetrievalClient ragRetrievalClient;
+    private final RagContextFormatter ragContextFormatter;
+    private final RagPromptBuilder ragPromptBuilder;
+    private final RagProperties ragProperties;
 
-    public PreConsultationService(LlmClientFactory llmClientFactory) {
+    public PreConsultationService(
+            LlmClientFactory llmClientFactory,
+            RagRetrievalClient ragRetrievalClient,
+            RagContextFormatter ragContextFormatter,
+            RagPromptBuilder ragPromptBuilder,
+            RagProperties ragProperties
+    ) {
         this.llmClientFactory = llmClientFactory;
+        this.ragRetrievalClient = ragRetrievalClient;
+        this.ragContextFormatter = ragContextFormatter;
+        this.ragPromptBuilder = ragPromptBuilder;
+        this.ragProperties = ragProperties;
     }
 
     public PreConsultationResponse ask(PreConsultationRequest request) {
@@ -26,7 +44,8 @@ public class PreConsultationService {
         int round = request.safeRound();
         String purpose = LlmClientFactory.PURPOSE_PRE_CONSULTATION;
         LlmProviderType provider = llmClientFactory.providerForPurpose(purpose);
-        List<LlmMessage> messages = buildMessages(request, mode, input, round);
+        String ragContext = retrieveRagContext(input, mode);
+        List<LlmMessage> messages = buildMessages(request, mode, input, round, ragContext);
         LlmChatRequest chatRequest = new LlmChatRequest(
                 messages,
                 purpose,
@@ -62,10 +81,11 @@ public class PreConsultationService {
             PreConsultationRequest request,
             String mode,
             String input,
-            int round
+            int round,
+            String ragContext
     ) {
         List<LlmMessage> messages = new ArrayList<>();
-        messages.add(new LlmMessage("system", buildSystemPrompt(mode, round)));
+        messages.add(new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(mode, round), ragContext)));
         List<PreConsultationRequest.Message> history = request.safeHistory();
         int start = Math.max(0, history.size() - 8);
         for (PreConsultationRequest.Message message : history.subList(start, history.size())) {
@@ -80,6 +100,14 @@ public class PreConsultationService {
         }
         messages.add(new LlmMessage("user", truncate(input, 1200)));
         return messages;
+    }
+
+    private String retrieveRagContext(String input, String mode) {
+        String scene = "deep".equals(mode) ? RagRetrievalClient.SCENE_DEEP_INQUIRY : RagRetrievalClient.SCENE_PRE_INQUIRY;
+        return ragContextFormatter.format(
+                ragRetrievalClient.retrieve(input, scene),
+                ragProperties.getMaxContextChars()
+        );
     }
 
     private String truncate(String value, int maxLength) {

@@ -9,6 +9,10 @@ import com.liu.eemrsagent.llm.LlmChatResponse;
 import com.liu.eemrsagent.llm.LlmClientFactory;
 import com.liu.eemrsagent.llm.LlmException;
 import com.liu.eemrsagent.llm.LlmMessage;
+import com.liu.eemrsagent.rag.RagContextFormatter;
+import com.liu.eemrsagent.rag.RagPromptBuilder;
+import com.liu.eemrsagent.rag.RagProperties;
+import com.liu.eemrsagent.rag.RagRetrievalClient;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
@@ -26,15 +30,27 @@ public class MedicalRecordDraftService {
     private final LlmClientFactory llmClientFactory;
     private final ObjectMapper objectMapper;
     private final MedicalRecordDraftRepository repository;
+    private final RagRetrievalClient ragRetrievalClient;
+    private final RagContextFormatter ragContextFormatter;
+    private final RagPromptBuilder ragPromptBuilder;
+    private final RagProperties ragProperties;
 
     public MedicalRecordDraftService(
             LlmClientFactory llmClientFactory,
             ObjectMapper objectMapper,
-            MedicalRecordDraftRepository repository
+            MedicalRecordDraftRepository repository,
+            RagRetrievalClient ragRetrievalClient,
+            RagContextFormatter ragContextFormatter,
+            RagPromptBuilder ragPromptBuilder,
+            RagProperties ragProperties
     ) {
         this.llmClientFactory = llmClientFactory;
         this.objectMapper = objectMapper;
         this.repository = repository;
+        this.ragRetrievalClient = ragRetrievalClient;
+        this.ragContextFormatter = ragContextFormatter;
+        this.ragPromptBuilder = ragPromptBuilder;
+        this.ragProperties = ragProperties;
     }
 
     public MedicalRecordDraftGenerateResponse generate(MedicalRecordDraftGenerateRequest request) {
@@ -133,9 +149,10 @@ public class MedicalRecordDraftService {
 
     private String callLlm(MedicalRecordDraftGenerateRequest request) {
         String purpose = LlmClientFactory.PURPOSE_MEDICAL_RECORD_DRAFT;
+        String ragContext = retrieveRagContext(request);
         LlmChatRequest chatRequest = new LlmChatRequest(
                 List.of(
-                        new LlmMessage("system", buildSystemPrompt()),
+                        new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(), ragContext)),
                         new LlmMessage("user", buildUserPrompt(request))
                 ),
                 purpose,
@@ -158,6 +175,14 @@ public class MedicalRecordDraftService {
             throw new IllegalStateException("LLM returned empty medical record draft");
         }
         return content.trim();
+    }
+
+    private String retrieveRagContext(MedicalRecordDraftGenerateRequest request) {
+        String query = (request.normalizedConclusion() + "\n" + formatHistory(request.history())).trim();
+        return ragContextFormatter.format(
+                ragRetrievalClient.retrieve(query, RagRetrievalClient.SCENE_MEDICAL_RECORD),
+                ragProperties.getMaxContextChars()
+        );
     }
 
     private JsonNode parseAndValidate(String rawReply) throws JsonProcessingException {
