@@ -88,6 +88,8 @@ evaluation/reports/pre_consultation_eval_scored_results_*.xlsx
 evaluation/reports/rag_ab_test_progress.json
 evaluation/reports/rag_ab_test_cache.json
 evaluation/reports/*stdout_latest.txt
+rag_ab_test_progress.json
+rag_ab_test_cache.json
 *partial*
 *checkpoint*
 
