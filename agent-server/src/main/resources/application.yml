@@ -53,3 +53,15 @@ rag:
     - medical_record_template
   fail-open: ${RAG_FAIL_OPEN:true}
   debug-log: ${RAG_DEBUG_LOG:true}
+  question-plan:
+    enabled: ${RAG_QUESTION_PLAN_ENABLED:true}
+    max-key-questions-quick: ${RAG_MAX_KEY_QUESTIONS_QUICK:5}
+    max-key-questions-deep: ${RAG_MAX_KEY_QUESTIONS_DEEP:8}
+    must-ask-target-coverage: ${RAG_MUST_ASK_TARGET_COVERAGE:0.6}
+  post-process:
+    enabled: ${RAG_POST_PROCESS_ENABLED:true}
+    max-added-questions: ${RAG_POST_PROCESS_MAX_ADDED_QUESTIONS:3}
+  query-expansion:
+    enabled: ${RAG_QUERY_EXPANSION_ENABLED:true}
+  retrieval:
+    ensure-doc-type-balance: ${RAG_ENSURE_DOC_TYPE_BALANCE:true}

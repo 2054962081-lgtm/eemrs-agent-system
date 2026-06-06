@@ -29,8 +29,12 @@ public class RagRetrievalClient {
     }
 
     public List<RagChunk> retrieve(String query, String scene) {
+        return retrieveWithMetadata(query, scene).chunks();
+    }
+
+    public RagRetrievalResult retrieveWithMetadata(String query, String scene) {
         if (!properties.isEnabled() || query == null || query.isBlank()) {
-            return List.of();
+            return RagRetrievalResult.empty();
         }
         long start = System.nanoTime();
         try {
@@ -45,17 +49,24 @@ public class RagRetrievalClient {
                 return handleFailure("RAG service returned success=false: " + (response == null ? "null response" : response.errorMessage()));
             }
             List<RagChunk> chunks = response.chunks() == null ? List.of() : response.chunks();
+            Map<String, Integer> docTypeCounts = response.docTypeCounts() == null ? Map.of() : response.docTypeCounts();
             if (properties.isDebugLog()) {
                 log.info(
-                        "RAG retrieved scene={}, inputLength={}, elapsedMs={}, hitCount={}, docTypes={}",
+                        "RAG retrieved scene={}, inputLength={}, elapsedMs={}, hitCount={}, docTypes={}, queryExpansion={}",
                         scene,
                         query.length(),
                         elapsedMs(start),
                         chunks.size(),
-                        docTypeCounts(chunks)
+                        docTypeCounts.isEmpty() ? docTypeCounts(chunks) : docTypeCounts,
+                        Boolean.TRUE.equals(response.usedQueryExpansion())
                 );
             }
-            return chunks;
+            return new RagRetrievalResult(
+                    chunks,
+                    response.expandedQuery() == null ? "" : response.expandedQuery(),
+                    docTypeCounts,
+                    Boolean.TRUE.equals(response.usedQueryExpansion())
+            );
         } catch (RuntimeException e) {
             return handleFailure("RAG retrieval failed: " + e.getMessage());
         }
@@ -71,12 +82,12 @@ public class RagRetrievalClient {
                 .build();
     }
 
-    private List<RagChunk> handleFailure(String message) {
+    private RagRetrievalResult handleFailure(String message) {
         if (properties.isDebugLog()) {
             log.warn("{}; failOpen={}", message, properties.isFailOpen());
         }
         if (properties.isFailOpen()) {
-            return List.of();
+            return RagRetrievalResult.empty();
         }
         throw new IllegalStateException(message);
     }

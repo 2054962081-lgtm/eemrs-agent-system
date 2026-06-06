@@ -21,7 +21,7 @@ class MedicalRagMilvus:
         try:
             from pymilvus import DataType, MilvusClient
         except ImportError as exc:
-            raise RuntimeError("鏈畨瑁?pymilvus銆傝鍏堟墽琛?pip install -r requirements-rag.txt銆?) from exc
+            raise RuntimeError("未安装 pymilvus，请先执行 pip install -r requirements-rag.txt。") from exc
         self.DataType = DataType
         self.MilvusClient = MilvusClient
         self.client = None
@@ -92,8 +92,8 @@ class MedicalRagMilvus:
             current_dim = self.embedding_dim()
             if current_dim and current_dim != embedding_dim:
                 raise RuntimeError(
-                    f"collection 宸插瓨鍦ㄤ絾鍚戦噺缁村害涓嶄竴鑷? 褰撳墠 {current_dim}, 妯″瀷 {embedding_dim}銆?
-                    " 璇蜂娇鐢?--reset 閲嶅缓銆?
+                    f"collection 已存在但向量维度不一致：当前 {current_dim}, 模型 {embedding_dim}。"
+                    "请使用 --reset 重建。"
                 )
         else:
             self.create_collection(embedding_dim)

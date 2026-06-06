@@ -506,6 +506,31 @@ def run_rag_case(base_url: str, case: dict[str, Any], timeout: float, multi_turn
     return response, elapsed
 
 
+def unwrap_api_data(response: Any) -> Any:
+    if isinstance(response, dict) and "data" in response:
+        return response.get("data")
+    return response
+
+
+def final_preconsultation_payload(response: Any) -> dict[str, Any]:
+    if isinstance(response, dict) and response.get("multiTurn") and response.get("finalResponse"):
+        return final_preconsultation_payload(response.get("finalResponse"))
+    data = unwrap_api_data(response)
+    return data if isinstance(data, dict) else {}
+
+
+def rag_debug_from_response(response: Any) -> dict[str, Any]:
+    data = final_preconsultation_payload(response)
+    debug = data.get("ragDebug") if isinstance(data, dict) else {}
+    return debug if isinstance(debug, dict) else {}
+
+
+def join_debug_list(value: Any) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value)
+    return stringify(value) if value not in (None, "") else ""
+
+
 def is_service_unavailable_error(exc: BaseException) -> bool:
     text = str(exc)
     return any(marker in text for marker in [
@@ -528,6 +553,9 @@ def retrieve_rag_details(query: str, mode: str) -> dict[str, Any]:
         chunks = response.get("chunks") or []
         return {
             "query": query,
+            "expanded_query": response.get("expanded_query", ""),
+            "used_query_expansion": bool(response.get("used_query_expansion")),
+            "rag_doc_type_counts": stringify(response.get("doc_type_counts") or {}),
             "rag_hit_count": len(chunks),
             "rag_doc_types": "; ".join(str(chunk.get("doc_type") or "") for chunk in chunks),
             "rag_titles": "; ".join(str(chunk.get("title") or "") for chunk in chunks),
@@ -539,6 +567,9 @@ def retrieve_rag_details(query: str, mode: str) -> dict[str, Any]:
     except Exception as exc:
         return {
             "query": query,
+            "expanded_query": "",
+            "used_query_expansion": False,
+            "rag_doc_type_counts": "",
             "rag_hit_count": 0,
             "rag_doc_types": "",
             "rag_titles": "",
@@ -766,6 +797,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--case-id", action="append", help="Only include the specified case_id. Can be repeated.")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--rerun-rag", action="store_true", help="Ignore cached RAG scores and request the current RAG backend again.")
     parser.add_argument("--sleep-ms", type=int, default=0)
     parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     parser.add_argument("--pre-inquiry-path", default=DEFAULT_PRE_INQUIRY_PATH)
@@ -835,12 +867,14 @@ def main() -> int:
     skipped_completed_count = 0
     newly_executed_count = 0
     retried_failed_count = 0
-    if args.resume:
+    if args.resume and not args.rerun_rag:
         resume_cache, resume_source = load_resume_cache(output_dir)
         if resume_source:
             notes.append(f"断点续跑已读取缓存来源：{resume_source}")
         else:
             notes.append("断点续跑未找到已有缓存或 A/B 工作簿，将从当前唯一 case 集开始执行。")
+    if args.rerun_rag:
+        notes.append("--rerun-rag enabled: historical no-RAG scores are reused, current RAG responses are requested again.")
     consecutive_service_failures = 0
     aborted_due_to_service_failure = False
 
@@ -890,9 +924,24 @@ def main() -> int:
             try:
                 response, elapsed_ms = run_rag_case(args.backend_url, case, timeout=args.request_timeout, multi_turn=args.multi_turn)
                 rag_score = score_response(case, response, dry_run=False)
+                debug = rag_debug_from_response(response)
                 rag_score["rag_request_time_ms"] = round(elapsed_ms, 1)
                 rag_score["rag_model_response"] = rag_score.get("model_response", "")
                 rag_score["rag_score_reason"] = rag_score.get("score_reason", "")
+                rag_score["rag_question_plan_key_questions"] = join_debug_list(debug.get("ragQuestionPlanKeyQuestions"))
+                rag_score["rag_question_plan_red_flags"] = join_debug_list(debug.get("ragQuestionPlanRedFlags"))
+                rag_score["rag_question_plan_urgency"] = debug.get("ragQuestionPlanUrgency", "")
+                rag_score["rag_question_plan_departments"] = join_debug_list(debug.get("ragQuestionPlanDepartments"))
+                rag_score["coverage_before_postprocess"] = debug.get("coverageBeforePostprocess", "")
+                rag_score["coverage_after_postprocess"] = debug.get("coverageAfterPostprocess", "")
+                rag_score["post_process_added_questions"] = debug.get("postProcessAddedQuestions", "")
+                rag_score["used_question_plan"] = debug.get("usedQuestionPlan", "")
+                rag_score["used_query_expansion"] = debug.get("usedQueryExpansion", retrieval.get("used_query_expansion", ""))
+                rag_score["used_postprocess"] = debug.get("usedPostprocess", "")
+                if debug.get("expandedQuery"):
+                    retrieval["expanded_query"] = debug.get("expandedQuery")
+                if debug.get("ragDocTypeCounts"):
+                    retrieval["rag_doc_type_counts"] = stringify(debug.get("ragDocTypeCounts"))
                 newly_executed_count += 1
                 consecutive_service_failures = 0
             except (TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
@@ -915,6 +964,16 @@ def main() -> int:
                     "rag_hit_count": retrieval.get("rag_hit_count", ""),
                     "rag_doc_types": retrieval.get("rag_doc_types", ""),
                     "rag_titles": retrieval.get("rag_titles", ""),
+                    "rag_question_plan_key_questions": rag_score.get("rag_question_plan_key_questions", ""),
+                    "rag_question_plan_red_flags": rag_score.get("rag_question_plan_red_flags", ""),
+                    "rag_question_plan_urgency": rag_score.get("rag_question_plan_urgency", ""),
+                    "rag_question_plan_departments": rag_score.get("rag_question_plan_departments", ""),
+                    "coverage_before_postprocess": rag_score.get("coverage_before_postprocess", ""),
+                    "coverage_after_postprocess": rag_score.get("coverage_after_postprocess", ""),
+                    "post_process_added_questions": rag_score.get("post_process_added_questions", ""),
+                    "used_question_plan": rag_score.get("used_question_plan", ""),
+                    "used_query_expansion": rag_score.get("used_query_expansion", ""),
+                    "used_postprocess": rag_score.get("used_postprocess", ""),
                     "rag_model_response": rag_score.get("rag_model_response", ""),
                     "rag_score_reason": rag_score.get("rag_score_reason", ""),
                 }
@@ -947,6 +1006,18 @@ def main() -> int:
             "rag_titles": retrieval.get("rag_titles", ""),
             "rag_request_time_ms": rag_score.get("rag_request_time_ms", retrieval.get("rag_request_time_ms", "")),
             "rag_failed_but_fallback": retrieval.get("rag_failed_but_fallback", ""),
+            "rag_question_plan_key_questions": rag_score.get("rag_question_plan_key_questions", ""),
+            "rag_question_plan_red_flags": rag_score.get("rag_question_plan_red_flags", ""),
+            "rag_question_plan_urgency": rag_score.get("rag_question_plan_urgency", ""),
+            "rag_question_plan_departments": rag_score.get("rag_question_plan_departments", ""),
+            "expanded_query": retrieval.get("expanded_query", ""),
+            "rag_doc_type_counts": retrieval.get("rag_doc_type_counts", ""),
+            "coverage_before_postprocess": rag_score.get("coverage_before_postprocess", ""),
+            "coverage_after_postprocess": rag_score.get("coverage_after_postprocess", ""),
+            "post_process_added_questions": rag_score.get("post_process_added_questions", ""),
+            "used_question_plan": rag_score.get("used_question_plan", ""),
+            "used_query_expansion": rag_score.get("used_query_expansion", retrieval.get("used_query_expansion", "")),
+            "used_postprocess": rag_score.get("used_postprocess", ""),
             "rag_model_response": rag_score.get("rag_model_response", ""),
             "rag_score_reason": rag_score.get("rag_score_reason", ""),
         }
@@ -991,6 +1062,12 @@ def main() -> int:
             "rag_is_suspected_failure": rag_score.get("is_suspected_failure", ""),
             "no_rag_request_error": no_rag.get("request_error", ""),
             "rag_request_error": rag_score.get("request_error", ""),
+            "rag_coverage_before_postprocess": rag_score.get("coverage_before_postprocess", ""),
+            "rag_coverage_after_postprocess": rag_score.get("coverage_after_postprocess", ""),
+            "post_process_added_questions": rag_score.get("post_process_added_questions", ""),
+            "used_question_plan": rag_score.get("used_question_plan", ""),
+            "used_query_expansion": rag_score.get("used_query_expansion", retrieval.get("used_query_expansion", "")),
+            "used_postprocess": rag_score.get("used_postprocess", ""),
             "improved": score_delta != "" and score_delta > 0,
             "regressed": score_delta != "" and score_delta < 0,
             "unchanged": score_delta != "" and score_delta == 0,

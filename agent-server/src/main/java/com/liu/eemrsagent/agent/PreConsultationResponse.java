@@ -10,7 +10,8 @@ public record PreConsultationResponse(
         String urgency,
         String model,
         String provider,
-        String error
+        String error,
+        PreConsultationRagDebug ragDebug
 ) {
     public static PreConsultationResponse ok(
             String mode,
@@ -22,7 +23,21 @@ public record PreConsultationResponse(
             String model,
             String provider
     ) {
-        return new PreConsultationResponse(true, mode, reply, finished, round, recommendedDepartment, urgency, model, provider, null);
+        return ok(mode, reply, finished, round, recommendedDepartment, urgency, model, provider, null);
+    }
+
+    public static PreConsultationResponse ok(
+            String mode,
+            String reply,
+            boolean finished,
+            int round,
+            String recommendedDepartment,
+            String urgency,
+            String model,
+            String provider,
+            PreConsultationRagDebug ragDebug
+    ) {
+        return new PreConsultationResponse(true, mode, reply, finished, round, recommendedDepartment, urgency, model, provider, null, ragDebug);
     }
 
     public static PreConsultationResponse fail(String mode, int round, String model, String provider, String error) {
@@ -39,7 +54,8 @@ public record PreConsultationResponse(
                 "normal",
                 model,
                 provider,
-                error
+                error,
+                null
         );
     }
 }

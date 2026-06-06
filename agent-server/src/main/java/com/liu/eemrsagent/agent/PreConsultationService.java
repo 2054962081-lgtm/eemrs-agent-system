@@ -7,6 +7,10 @@ import com.liu.eemrsagent.llm.LlmException;
 import com.liu.eemrsagent.llm.LlmMessage;
 import com.liu.eemrsagent.llm.LlmProviderType;
 import com.liu.eemrsagent.rag.RagContextFormatter;
+import com.liu.eemrsagent.rag.RagRetrievalResult;
+import com.liu.eemrsagent.rag.MustAskCoveragePostProcessor;
+import com.liu.eemrsagent.rag.QuestionPlan;
+import com.liu.eemrsagent.rag.QuestionPlanBuilder;
 import com.liu.eemrsagent.rag.RagPromptBuilder;
 import com.liu.eemrsagent.rag.RagProperties;
 import com.liu.eemrsagent.rag.RagRetrievalClient;
@@ -23,19 +27,25 @@ public class PreConsultationService {
     private final RagContextFormatter ragContextFormatter;
     private final RagPromptBuilder ragPromptBuilder;
     private final RagProperties ragProperties;
+    private final QuestionPlanBuilder questionPlanBuilder;
+    private final MustAskCoveragePostProcessor postProcessor;
 
     public PreConsultationService(
             LlmClientFactory llmClientFactory,
             RagRetrievalClient ragRetrievalClient,
             RagContextFormatter ragContextFormatter,
             RagPromptBuilder ragPromptBuilder,
-            RagProperties ragProperties
+            RagProperties ragProperties,
+            QuestionPlanBuilder questionPlanBuilder,
+            MustAskCoveragePostProcessor postProcessor
     ) {
         this.llmClientFactory = llmClientFactory;
         this.ragRetrievalClient = ragRetrievalClient;
         this.ragContextFormatter = ragContextFormatter;
         this.ragPromptBuilder = ragPromptBuilder;
         this.ragProperties = ragProperties;
+        this.questionPlanBuilder = questionPlanBuilder;
+        this.postProcessor = postProcessor;
     }
 
     public PreConsultationResponse ask(PreConsultationRequest request) {
@@ -44,8 +54,8 @@ public class PreConsultationService {
         int round = request.safeRound();
         String purpose = LlmClientFactory.PURPOSE_PRE_CONSULTATION;
         LlmProviderType provider = llmClientFactory.providerForPurpose(purpose);
-        String ragContext = retrieveRagContext(input, mode);
-        List<LlmMessage> messages = buildMessages(request, mode, input, round, ragContext);
+        RagState ragState = retrieveRag(input, mode);
+        List<LlmMessage> messages = buildMessages(request, mode, input, round, ragState.ragContext(), ragState.questionPlan());
         LlmChatRequest chatRequest = new LlmChatRequest(
                 messages,
                 purpose,
@@ -63,7 +73,8 @@ public class PreConsultationService {
             return PreConsultationResponse.fail(mode, round, "", provider.value(), e.getMessage());
         }
 
-        String reply = response.content();
+        MustAskCoveragePostProcessor.PostProcessResult postProcess = postProcessor.process(response.content(), ragState.questionPlan());
+        String reply = postProcess.reply();
         boolean finished = isFinished(mode, round, input, reply);
         return PreConsultationResponse.ok(
                 mode,
@@ -73,7 +84,21 @@ public class PreConsultationService {
                 extractRecommendedDepartment(reply),
                 extractUrgency(reply),
                 response.model(),
-                response.provider()
+                response.provider(),
+                new PreConsultationRagDebug(
+                        ragState.questionPlan().keyQuestions(),
+                        ragState.questionPlan().redFlags(),
+                        ragState.questionPlan().urgencyLevel(),
+                        ragState.questionPlan().recommendedDepartments(),
+                        ragState.retrievalResult().expandedQuery(),
+                        ragState.retrievalResult().docTypeCounts(),
+                        postProcess.coverageBefore(),
+                        postProcess.coverageAfter(),
+                        postProcess.addedQuestionCount(),
+                        ragState.questionPlan().hasContent(),
+                        ragState.retrievalResult().usedQueryExpansion(),
+                        postProcess.usedPostProcess()
+                )
         );
     }
 
@@ -82,10 +107,11 @@ public class PreConsultationService {
             String mode,
             String input,
             int round,
-            String ragContext
+            String ragContext,
+            QuestionPlan questionPlan
     ) {
         List<LlmMessage> messages = new ArrayList<>();
-        messages.add(new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(mode, round), ragContext)));
+        messages.add(new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(mode, round), ragContext, questionPlan)));
         List<PreConsultationRequest.Message> history = request.safeHistory();
         int start = Math.max(0, history.size() - 8);
         for (PreConsultationRequest.Message message : history.subList(start, history.size())) {
@@ -102,12 +128,15 @@ public class PreConsultationService {
         return messages;
     }
 
-    private String retrieveRagContext(String input, String mode) {
+    private RagState retrieveRag(String input, String mode) {
         String scene = "deep".equals(mode) ? RagRetrievalClient.SCENE_DEEP_INQUIRY : RagRetrievalClient.SCENE_PRE_INQUIRY;
-        return ragContextFormatter.format(
-                ragRetrievalClient.retrieve(input, scene),
-                ragProperties.getMaxContextChars()
-        );
+        RagRetrievalResult result = ragRetrievalClient.retrieveWithMetadata(input, scene);
+        String context = ragContextFormatter.format(result.chunks(), ragProperties.getMaxContextChars());
+        QuestionPlan questionPlan = questionPlanBuilder.build(result.chunks(), mode, input);
+        return new RagState(context, questionPlan, result);
+    }
+
+    private record RagState(String ragContext, QuestionPlan questionPlan, RagRetrievalResult retrievalResult) {
     }
 
     private String truncate(String value, int maxLength) {
