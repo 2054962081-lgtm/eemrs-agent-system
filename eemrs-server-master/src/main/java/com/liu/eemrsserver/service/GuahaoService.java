@@ -32,6 +32,10 @@ public class GuahaoService {
         return guahaoCrypto.getPatientInfo(idNumber) ;
     }
 
+    public Waiting findWaitingAppointment(String department, String doctorIdNumber, String patientIdNumber) {
+        return guahaoCrypto.findWaitingAppointment(department, doctorIdNumber, patientIdNumber);
+    }
+
     public PatientInfo sendInfo(String id) {
         return guahaoCrypto.sendInfo(id);
     }

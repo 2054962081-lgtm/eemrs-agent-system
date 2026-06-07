@@ -6,6 +6,7 @@ import com.liu.eemrsserver.domain.DoctorInfo;
 import com.liu.eemrsserver.domain.VisitInfo;
 import com.liu.eemrsserver.jsontrans.QueryConditions;
 import com.liu.eemrsserver.mapper.DataOpMappper;
+import com.liu.eemrsserver.medicalrecord.MedicalRecordSignatureBuilder;
 import com.liu.eemrsserver.utils.crypto.JavaBeanEnc;
 import com.liu.eemrsserver.utils.crypto.OperateKey;
 import com.liu.eemrsserver.utils.crypto.SM2;
@@ -35,7 +36,7 @@ public class DataOpCrypto {
     public boolean insertInto(VisitInfo patientInfo) {
         boolean verify;
         try {
-            verify = SM2.verify(patientInfo.getConditionDescription(), patientInfo.getSignature(), OperateKey.toSM2PublicKey(Base64.getDecoder().decode(patientInfo.getDPk())));
+            verify = verifyMedicalRecordSignature(patientInfo);
         } catch (Exception e) {
             throw new BadRequestException("SM2 signature format is invalid");
         }
@@ -47,11 +48,10 @@ public class DataOpCrypto {
         }
         ensureVisitTime(patientInfo);
         String hash = SM3.hash(patientInfo.getPatientIdNumber());
-        String enSum = dataOpMappper.getCounterByIdHash(hash);
-        if (enSum == null) {
+        Integer sum = resolvePatientCounter(hash);
+        if (sum == null) {
             throw new BadRequestException("Patient counter not found, please register the patient before writing medical record");
         }
-        int sum = Integer.parseInt(SM4_String.decWithIV(enSum,smServerKey.getSm4Key()));
         VisitInfo enPI = JavaBeanEnc.encVisitInfo((sum+1)+"",patientInfo, smServerKey.getSm4Key(), boldyrevaCipher, smServerKey.getOpeKey());
         if (enPI.getVisitTime() == null) {
             throw new BadRequestException("visitTime encryption failed");
@@ -64,6 +64,13 @@ public class DataOpCrypto {
         return true;
     }
 
+    private boolean verifyMedicalRecordSignature(VisitInfo patientInfo) {
+        String signatureText = MedicalRecordSignatureBuilder.build(patientInfo);
+        String legacyText = patientInfo.getConditionDescription();
+        return SM2.verify(signatureText, patientInfo.getSignature(), OperateKey.toSM2PublicKey(Base64.getDecoder().decode(patientInfo.getDPk())))
+                || SM2.verify(legacyText, patientInfo.getSignature(), OperateKey.toSM2PublicKey(Base64.getDecoder().decode(patientInfo.getDPk())));
+    }
+
     private void ensureVisitTime(VisitInfo patientInfo) {
         if (patientInfo.getVisitTime() == null) {
             patientInfo.setVisitTime(BigInteger.valueOf(System.currentTimeMillis()));
@@ -74,10 +81,9 @@ public class DataOpCrypto {
         QueryConditions qc = JavaBeanEnc.enQueryCondition(queryConditions, smServerKey.getSm4Key(), boldyrevaCipher, smServerKey.getOpeKey());
         if (queryConditions.getPatientIdNumber()!=null){
             String hash = SM3.hash(queryConditions.getPatientIdNumber());
-            String enSum = dataOpMappper.getCounterByIdHash(hash);
             Integer sum;
-            if (enSum!=null){
-                sum = Integer.parseInt(SM4_String.decWithIV(enSum,smServerKey.getSm4Key()));
+            sum = resolvePatientCounter(hash);
+            if (sum!=null){
                 if (sum <= 0) {
                     return new ArrayList<VisitInfo>();
                 }
@@ -104,6 +110,28 @@ public class DataOpCrypto {
         return collect;
     }
 
+    private Integer resolvePatientCounter(String patientIdHash) {
+        List<String> encryptedCounters = dataOpMappper.getCountersByIdHash(patientIdHash);
+        if (encryptedCounters == null || encryptedCounters.isEmpty()) {
+            return null;
+        }
+        Integer maxCounter = null;
+        for (String encryptedCounter : encryptedCounters) {
+            if (encryptedCounter == null) {
+                continue;
+            }
+            try {
+                int counter = Integer.parseInt(SM4_String.decWithIV(encryptedCounter, smServerKey.getSm4Key()));
+                if (maxCounter == null || counter > maxCounter) {
+                    maxCounter = counter;
+                }
+            } catch (RuntimeException e) {
+                // Historical duplicate accounts can contain counters encrypted with an obsolete key.
+            }
+        }
+        return maxCounter;
+    }
+
     public DoctorInfo getDocInfo(String id) {
         String hash = SM3.hash(id);
         DoctorInfo d = dataOpMappper.getDocInfoByHashCode(hash);
@@ -117,13 +145,40 @@ public class DataOpCrypto {
     }
 
     public List<DoctorInfo> getDocName(String department) {
-        String enDept = SM4_String.encWithoutIV(department, smServerKey.getSm4Key());
-        List<DoctorInfo> doctorInfos = dataOpMappper.getDocNameByDepartment(enDept);
+        if (department == null || department.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        String normalizedDepartment = department.trim();
+        String enDept = SM4_String.encWithoutIV(normalizedDepartment, smServerKey.getSm4Key());
+        List<DoctorInfo> doctorInfos = dataOpMappper.getDocNameByDepartment(enDept, normalizedDepartment);
         List<DoctorInfo> collect = doctorInfos.stream()
-                .map(d -> {
-                    return JavaBeanEnc.decDocInfoInfo(d, smServerKey.getSm4Key());
-                })
+                .map(this::decryptDoctorInfoForDepartmentQuery)
                 .collect(Collectors.toList());
         return collect;
+    }
+
+    private DoctorInfo decryptDoctorInfoForDepartmentQuery(DoctorInfo doctorInfo) {
+        try {
+            return JavaBeanEnc.decDocInfoInfo(doctorInfo, smServerKey.getSm4Key());
+        } catch (RuntimeException e) {
+            DoctorInfo out = new DoctorInfo();
+            out.setDepartment(doctorInfo.getDepartment());
+            out.setGender(decryptWithIvOrOriginal(doctorInfo.getGender()));
+            out.setIdHashCode(null);
+            out.setIdNumber(decryptWithIvOrOriginal(doctorInfo.getIdNumber()));
+            out.setUserName(decryptWithIvOrOriginal(doctorInfo.getUserName()));
+            return out;
+        }
+    }
+
+    private String decryptWithIvOrOriginal(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return SM4_String.decWithIV(value, smServerKey.getSm4Key());
+        } catch (RuntimeException e) {
+            return value;
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.liu.eemrsserver.common.ApiResponse;
 import com.liu.eemrsserver.domain.VisitInfo;
 import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordQueryRequest;
 import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordRequest;
+import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordSignatureResponse;
 import com.liu.eemrsserver.security.CurrentUser;
 import com.liu.eemrsserver.security.UserPrincipal;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,11 +23,19 @@ import java.util.List;
 public class MedicalRecordController {
     @Autowired
     private MedicalRecordServiceAdapter medicalRecordServiceAdapter;
+    @Autowired
+    private MedicalRecordSignatureService medicalRecordSignatureService;
 
     @PostMapping
     public ApiResponse<Boolean> create(@RequestBody MedicalRecordRequest request,
                                        @CurrentUser UserPrincipal currentUser) {
         return ApiResponse.ok("medical record handled", medicalRecordServiceAdapter.create(request, currentUser));
+    }
+
+    @PostMapping("/sign")
+    public ApiResponse<MedicalRecordSignatureResponse> sign(@RequestBody MedicalRecordRequest request,
+                                                            @CurrentUser UserPrincipal currentUser) {
+        return ApiResponse.ok("签名生成成功", medicalRecordSignatureService.sign(request, currentUser));
     }
 
     @GetMapping
@@ -50,4 +59,5 @@ public class MedicalRecordController {
         request.setDepartment(department);
         return ApiResponse.ok(medicalRecordServiceAdapter.query(request, currentUser));
     }
+
 }

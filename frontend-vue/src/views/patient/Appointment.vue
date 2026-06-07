@@ -16,25 +16,31 @@ const doctors = ref<DoctorInfo[]>([])
 const form = reactive({ department: '', userName: '' })
 
 async function searchDoctors() {
-  if (!form.department) {
+  const department = form.department.trim()
+  if (!department) {
     ElMessage.warning('请先选择或输入科室')
     return
   }
   loading.value = true
   try {
-    doctors.value = await getDoctorsByDepartment(form.department)
+    doctors.value = await getDoctorsByDepartment(department)
   } finally {
     loading.value = false
   }
 }
 
 async function appoint(row: DoctorInfo) {
+  const department = form.department.trim()
+  if (!department) {
+    ElMessage.warning('请先选择或输入科室')
+    return
+  }
   submitting.value = true
   try {
     await createAppointment({
-      department: form.department,
+      department,
       idNumber: auth.idNumber,
-      userName: form.userName || '患者',
+      userName: form.userName.trim() || '患者',
       doctorIdNumber: row.idNumber,
     })
     ElMessage.success('挂号成功')

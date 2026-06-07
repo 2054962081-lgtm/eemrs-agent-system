@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageContainer from '../../components/PageContainer.vue'
 import DataCard from '../../components/DataCard.vue'
 import MedicalRecordDraftViewer from '../../components/doctor/MedicalRecordDraftViewer.vue'
-import { createMedicalRecord } from '../../api/medicalRecord'
+import { createMedicalRecord, signMedicalRecord } from '../../api/medicalRecord'
 import type { PatientInfo } from '../../api/types'
 import { useAuthStore } from '../../stores/auth'
 
@@ -13,6 +13,8 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
+const signing = ref(false)
+const signatureDirty = ref(false)
 
 const patient = computed<PatientInfo>(() => {
   const raw = sessionStorage.getItem('eemrs-current-patient')
@@ -35,29 +37,72 @@ const form = reactive({
   signature: '',
 })
 
+const signatureSource = computed(() => [
+  form.department,
+  form.medication,
+  form.conditionDescription,
+  form.cost,
+  form.visitTime,
+  form.patientName,
+  form.patientIdNumber,
+  form.age,
+  form.doctorName,
+  form.doctorIdNumber,
+  form.gender,
+])
+
 function optionalNumber(value: unknown) {
   const text = String(value || '').trim()
   return text ? Number(text) : undefined
 }
 
+function buildPayload() {
+  return {
+    department: form.department.trim(),
+    medication: form.medication.trim(),
+    conditionDescription: form.conditionDescription.trim(),
+    cost: form.cost.trim(),
+    visitTime: Number(form.visitTime),
+    patientName: form.patientName.trim(),
+    patientIdNumber: form.patientIdNumber.trim(),
+    age: optionalNumber(form.age),
+    doctorName: form.doctorName.trim(),
+    doctorIdNumber: form.doctorIdNumber.trim(),
+    gender: form.gender.trim(),
+    dPk: form.dPk.trim(),
+    signature: form.signature.trim(),
+  }
+}
+
+async function generateSignature(showSuccess = true) {
+  signing.value = true
+  try {
+    const result = await signMedicalRecord(buildPayload())
+    const dPk = result.dPk || result.DPk || result.dpk || ''
+    if (!dPk || !result.signature) {
+      throw new Error('signature response missing dPk or signature')
+    }
+    form.dPk = dPk
+    form.signature = result.signature
+    signatureDirty.value = false
+    if (showSuccess) {
+      ElMessage.success('签名已生成')
+    }
+  } catch {
+    ElMessage.error('签名生成失败，请确认已接诊该患者且病历内容完整')
+    throw new Error('signature generation failed')
+  } finally {
+    signing.value = false
+  }
+}
+
 async function submit() {
   loading.value = true
   try {
-    const inserted = await createMedicalRecord({
-      department: form.department.trim(),
-      medication: form.medication.trim(),
-      conditionDescription: form.conditionDescription.trim(),
-      cost: form.cost.trim(),
-      visitTime: Number(form.visitTime),
-      patientName: form.patientName.trim(),
-      patientIdNumber: form.patientIdNumber.trim(),
-      age: optionalNumber(form.age),
-      doctorName: form.doctorName.trim(),
-      doctorIdNumber: form.doctorIdNumber.trim(),
-      gender: form.gender.trim(),
-      dPk: form.dPk.trim(),
-      signature: form.signature.trim(),
-    })
+    if (!form.dPk.trim() || !form.signature.trim()) {
+      await generateSignature(false)
+    }
+    const inserted = await createMedicalRecord(buildPayload())
     if (!inserted) {
       ElMessage.error('病历写入失败，请检查患者状态和 SM2 签名信息')
       return
@@ -70,6 +115,14 @@ async function submit() {
     loading.value = false
   }
 }
+
+watch(signatureSource, () => {
+  if (form.dPk || form.signature) {
+    form.dPk = ''
+    form.signature = ''
+    signatureDirty.value = true
+  }
+})
 </script>
 
 <template>
@@ -99,9 +152,25 @@ async function submit() {
         </el-row>
         <el-collapse>
           <el-collapse-item title="SM2 签名信息" name="sm2">
-            <el-alert type="info" show-icon :closable="false" title="请填入后端验签所需 dPk 与 signature，前端不保存医生私钥。" />
-            <el-form-item label="dPk"><el-input v-model="form.dPk" type="textarea" :rows="3" /></el-form-item>
-            <el-form-item label="signature"><el-input v-model="form.signature" type="textarea" :rows="3" /></el-form-item>
+            <el-alert
+              v-if="signatureDirty"
+              type="warning"
+              show-icon
+              :closable="false"
+              title="病历内容已修改，请重新生成签名。"
+            />
+            <el-alert
+              v-else
+              type="info"
+              show-icon
+              :closable="false"
+              title="签名由后端使用医生 SM2 私钥生成，前端不保存医生私钥。"
+            />
+            <el-form-item label="dPk"><el-input v-model="form.dPk" type="textarea" :rows="3" readonly /></el-form-item>
+            <el-form-item label="signature"><el-input v-model="form.signature" type="textarea" :rows="3" readonly /></el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="signing" @click="generateSignature()">生成签名</el-button>
+            </el-form-item>
           </el-collapse-item>
         </el-collapse>
         <el-form-item class="submit-row">

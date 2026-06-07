@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liu.eemrsserver.mapper.LabReportMapper">
+    <select id="queryReportTokensBySearchIndexes" resultType="string">
+        select distinct report_token
+        from tb_lab_report_search_index
+        where index_token in <foreach open="(" collection="indexTokens" item="indexToken" separator="," close=")">#{indexToken}</foreach>
+    </select>
+
+    <select id="queryReportsByTokens" resultType="com.liu.eemrsserver.domain.LabReport">
+        select *
+        from tb_lab_report
+        where report_token in <foreach open="(" collection="reportTokens" item="reportToken" separator="," close=")">#{reportToken}</foreach>
+    </select>
+</mapper>

@@ -1,5 +1,6 @@
 package com.liu.eemrsserver.crypto;
 
+import com.liu.eemrsserver.common.BadRequestException;
 import com.liu.eemrsserver.config.SMServerKey;
 import com.liu.eemrsserver.domain.GuahaoInfo;
 import com.liu.eemrsserver.domain.PatientInfo;
@@ -9,7 +10,6 @@ import com.liu.eemrsserver.utils.NewPair;
 import com.liu.eemrsserver.utils.crypto.JavaBeanEnc;
 import com.liu.eemrsserver.utils.crypto.SM3;
 import com.liu.eemrsserver.utils.crypto.sm4.SM4_String;
-import org.apache.ibatis.annotations.Param;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -49,14 +49,41 @@ public class GuahaoCrypto {
         return collect;
     }
 
+    public Waiting findWaitingAppointment(String department, String doctorIdNumber, String patientIdNumber) {
+        String enDept = SM4_String.encWithoutIV(department.trim(), smServerKey.getSm4Key());
+        String doctorHash = SM3.hash(doctorIdNumber);
+        String patientHash = SM3.hash(patientIdNumber);
+        Waiting encryptedWaiting = guahaoMapper.queryWaitingByDeptDoctorAndPatient(enDept, doctorHash, patientHash);
+        if (encryptedWaiting == null) {
+            return null;
+        }
+        return JavaBeanEnc.decUserInfo(encryptedWaiting, smServerKey.getSm4Key());
+    }
+
     public PatientInfo getPatientInfo(String idNumber) {
         String hashCode =SM3.hash(idNumber);
-        PatientInfo p = guahaoMapper.getPatientByHashCode(hashCode);
-        if (p!=null){
-            PatientInfo out = JavaBeanEnc.decPatientInfo(p,smServerKey.getSm4Key());
+        List<PatientInfo> patients = guahaoMapper.listPatientsByHashCode(hashCode);
+        if (patients == null || patients.isEmpty()) {
+            throw new BadRequestException("未找到患者信息");
+        }
+        for (PatientInfo patient : patients) {
+            PatientInfo decrypted = tryDecryptPatientInfo(patient, idNumber);
+            if (decrypted != null) {
+                return decrypted;
+            }
+        }
+        throw new BadRequestException("患者信息解密失败");
+    }
+
+    private PatientInfo tryDecryptPatientInfo(PatientInfo patientInfo, String fallbackIdNumber) {
+        try {
+            PatientInfo out = JavaBeanEnc.decPatientInfo(patientInfo, smServerKey.getSm4Key());
+            if (out.getIdNumber() == null) {
+                out.setIdNumber(fallbackIdNumber);
+            }
             return out;
-        }else {
-            return new PatientInfo() ;
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

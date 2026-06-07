@@ -8,7 +8,7 @@ public enum Role {
         if ("pt".equals(type)) {
             return PATIENT;
         }
-        if ("dt".equals(type)) {
+        if ("dt".equals(type) || "dr".equals(type)) {
             return DOCTOR;
         }
         throw new UnauthorizedException("Unsupported user type: " + type);
