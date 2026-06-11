@@ -48,6 +48,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers(HttpMethod.GET, "/api/medical-records", "/api/lab-reports/search-by-dept-time").hasAnyRole("PATIENT", "DOCTOR")
                 .antMatchers(HttpMethod.POST, "/api/ai/pre-consultations", "/api/ai/report-interpretations").hasRole("PATIENT")
                 .antMatchers(HttpMethod.POST, "/api/ai/record-drafts").hasRole("DOCTOR")
+                .antMatchers("/api/memory/**").hasRole("PATIENT")
                 .anyRequest().authenticated();
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

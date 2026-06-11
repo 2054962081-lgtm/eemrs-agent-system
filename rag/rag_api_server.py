@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+import uuid
 from collections import Counter, OrderedDict
 from typing import Any
 
@@ -17,8 +19,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from .embedding_provider import EmbeddingProvider
-from .milvus_client import MedicalRagMilvus
-from .rag_config import DEFAULT_TOP_K, MILVUS_COLLECTION_NAME, MILVUS_HOST, MILVUS_PORT
+from .milvus_client import MedicalRagMilvus, UserMemoryMilvus
+from .rag_config import DEFAULT_TOP_K, MILVUS_COLLECTION_NAME, MILVUS_HOST, MILVUS_PORT, USER_MEMORY_COLLECTION_NAME
 from .rag_schema import ALLOWED_DOC_TYPES
 
 
@@ -74,14 +76,118 @@ class RetrieveResponse(BaseModel):
     error_message: str | None = None
 
 
+class MemoryUpsertRequest(BaseModel):
+    collection: str = USER_MEMORY_COLLECTION_NAME
+    text: str = Field(min_length=1)
+    metadata: dict[str, Any]
+
+
+class MemoryUpsertResponse(BaseModel):
+    success: bool
+    collection: str
+    memory_id: str | None = None
+    inserted_count: int = 0
+    error_message: str | None = None
+
+
+class MemorySearchRequest(BaseModel):
+    collection: str = USER_MEMORY_COLLECTION_NAME
+    query: str = Field(min_length=1)
+    topK: int = Field(default=5, ge=1, le=30)
+    filter: str
+
+
+class MemorySearchResult(BaseModel):
+    id: str | None = None
+    text: str | None = None
+    score: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemorySearchResponse(BaseModel):
+    success: bool
+    collection: str
+    results: list[MemorySearchResult] = Field(default_factory=list)
+    error_message: str | None = None
+
+
+class MemoryDeleteBySourceRequest(BaseModel):
+    collection: str = USER_MEMORY_COLLECTION_NAME
+    sourceId: str = Field(min_length=1)
+    filter: str
+    sourceType: str | None = None
+
+
+class MemoryDeleteResponse(BaseModel):
+    success: bool
+    collection: str
+    deleted_count: int = 0
+    error_message: str | None = None
+
+
+class MemoryHealthResponse(BaseModel):
+    success: bool
+    collection: str
+    collection_exists: bool
+    error_message: str | None = None
+
+
 app = FastAPI(title="Medical RAG Retrieval Service", version="1.0")
 provider: EmbeddingProvider | None = None
 milvus: MedicalRagMilvus | None = None
+user_memory_milvus: UserMemoryMilvus | None = None
 
 
 def clip_text(text: Any, limit: int = 1600) -> str:
     value = str(text or "")
     return value if len(value) <= limit else value[:limit] + "..."
+
+
+def clip_memory_text(text: Any, limit: int = 16000) -> str:
+    value = str(text or "").strip()
+    return value if len(value) <= limit else value[:limit]
+
+
+def safe_varchar(value: Any, limit: int, default: str = "") -> str:
+    text = str(value or default).strip()
+    return text[:limit]
+
+
+def safe_int64(value: Any, default: int | None = None) -> int:
+    if value is None or value == "":
+        return int(default if default is not None else time.time() * 1000)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default if default is not None else time.time() * 1000)
+
+
+def safe_error_message(exc: Exception) -> str:
+    text = str(exc)
+    return text.encode("utf-8", errors="ignore").decode("utf-8", errors="ignore")
+
+
+def safe_log(message: str) -> None:
+    print(message.encode("gbk", errors="ignore").decode("gbk", errors="ignore"))
+
+
+def patient_hash_from_filter(filter_expr: str) -> str | None:
+    if not filter_expr:
+        return None
+    match = re.search(r"patientIdHash\s*==\s*(['\"])([^'\"]+)\1", filter_expr)
+    return match.group(2) if match else None
+
+
+def ensure_user_memory_client(collection: str) -> UserMemoryMilvus:
+    global user_memory_milvus
+    if provider is None:
+        raise RuntimeError("Embedding provider 尚未初始化")
+    collection_name = safe_varchar(collection, 128, USER_MEMORY_COLLECTION_NAME) or USER_MEMORY_COLLECTION_NAME
+    if user_memory_milvus is None or user_memory_milvus.collection_name != collection_name:
+        user_memory_milvus = UserMemoryMilvus(MILVUS_HOST, MILVUS_PORT, collection_name)
+        user_memory_milvus.connect()
+    user_memory_milvus.ensure_collection(provider.embedding_dim)
+    return user_memory_milvus
 
 
 def as_list(value: Any) -> list[str]:
@@ -206,21 +312,37 @@ def startup() -> None:
     global provider, milvus
     provider = EmbeddingProvider()
     milvus = MedicalRagMilvus(MILVUS_HOST, MILVUS_PORT, MILVUS_COLLECTION_NAME)
-    milvus.connect()
-    if not milvus.has_collection():
-        raise RuntimeError(f"collection 不存在: {MILVUS_COLLECTION_NAME}")
+    try:
+        milvus.connect()
+        if not milvus.has_collection():
+            safe_log(f"Warning: RAG collection missing: {MILVUS_COLLECTION_NAME}")
+    except Exception as exc:
+        safe_log(f"Warning: Milvus RAG collection unavailable during startup: {safe_error_message(exc)}")
+        milvus = None
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
     exists = bool(milvus and milvus.has_collection())
-    return {"success": exists, "collection": MILVUS_COLLECTION_NAME, "collection_exists": exists}
+    user_memory_exists = False
+    try:
+        if user_memory_milvus is not None:
+            user_memory_exists = user_memory_milvus.has_collection()
+    except Exception:
+        user_memory_exists = False
+    return {
+        "success": exists,
+        "collection": MILVUS_COLLECTION_NAME,
+        "collection_exists": exists,
+        "user_memory_collection": USER_MEMORY_COLLECTION_NAME,
+        "user_memory_collection_exists": user_memory_exists,
+    }
 
 
 @app.post("/rag/retrieve", response_model=RetrieveResponse)
 def retrieve(request: RetrieveRequest) -> RetrieveResponse:
     if provider is None or milvus is None:
-        return RetrieveResponse(success=False, query=request.query, error_message="RAG 服务尚未初始化")
+        return RetrieveResponse(success=False, query=request.query, error_message="RAG 服务尚未连接 Milvus")
     if not milvus.has_collection():
         return RetrieveResponse(success=False, query=request.query, error_message=f"collection 不存在: {milvus.collection_name}")
 
@@ -271,6 +393,128 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
         )
     except Exception as exc:
         return RetrieveResponse(success=False, query=request.query, error_message=str(exc))
+
+
+@app.post("/memory/upsert", response_model=MemoryUpsertResponse)
+def upsert_memory(request: MemoryUpsertRequest) -> MemoryUpsertResponse:
+    try:
+        metadata = request.metadata or {}
+        patient_id_hash = safe_varchar(metadata.get("patientIdHash"), 128)
+        if not patient_id_hash:
+            return MemoryUpsertResponse(
+                success=False,
+                collection=request.collection,
+                error_message="patientIdHash is required",
+            )
+        now = int(time.time() * 1000)
+        memory_id = safe_varchar(
+            metadata.get("memoryId")
+            or metadata.get("id")
+            or f"{patient_id_hash}:{metadata.get('sourceType', 'memory')}:{metadata.get('sourceId') or uuid.uuid4()}",
+            128,
+        )
+        text = clip_memory_text(request.text)
+        vector = provider.encode_texts([text])[0] if provider is not None else []
+        client = ensure_user_memory_client(request.collection)
+        row = {
+            "memory_id": memory_id,
+            "patientIdHash": patient_id_hash,
+            "memoryLevel": safe_varchar(metadata.get("memoryLevel"), 32, "medium"),
+            "sourceType": safe_varchar(metadata.get("sourceType"), 64, "visit_summary"),
+            "sourceId": safe_varchar(metadata.get("sourceId"), 128),
+            "department": safe_varchar(metadata.get("department"), 128),
+            "eventTime": safe_int64(metadata.get("eventTime"), now),
+            "createdAt": safe_int64(metadata.get("createdAt"), now),
+            "text": text,
+            "embedding": vector,
+        }
+        inserted_count = client.upsert(row)
+        safe_log(f"User memory upsert succeeded, collection={client.collection_name}, sourceType={row['sourceType']}")
+        return MemoryUpsertResponse(
+            success=True,
+            collection=client.collection_name,
+            memory_id=memory_id,
+            inserted_count=inserted_count,
+        )
+    except Exception as exc:
+        safe_log(f"User memory upsert failed: {safe_error_message(exc)}")
+        return MemoryUpsertResponse(success=False, collection=request.collection, error_message=safe_error_message(exc))
+
+
+@app.post("/memory/search", response_model=MemorySearchResponse)
+def search_memory(request: MemorySearchRequest) -> MemorySearchResponse:
+    try:
+        patient_id_hash = patient_hash_from_filter(request.filter)
+        if not patient_id_hash:
+            return MemorySearchResponse(
+                success=False,
+                collection=request.collection,
+                error_message="patientIdHash filter is required",
+            )
+        query_vector = provider.encode_texts([request.query])[0] if provider is not None else []
+        client = ensure_user_memory_client(request.collection)
+        hits = client.search(query_vector, patient_id_hash, request.topK)
+        results: list[MemorySearchResult] = []
+        for hit in hits:
+            entity = hit.get("entity") or hit
+            metadata = {
+                "patientIdHash": entity.get("patientIdHash"),
+                "memoryLevel": entity.get("memoryLevel"),
+                "sourceType": entity.get("sourceType"),
+                "sourceId": entity.get("sourceId"),
+                "department": entity.get("department"),
+                "eventTime": entity.get("eventTime"),
+                "createdAt": entity.get("createdAt"),
+            }
+            results.append(
+                MemorySearchResult(
+                    id=entity.get("memory_id"),
+                    text=entity.get("text"),
+                    score=float(hit.get("distance", hit.get("score", 0.0)) or 0.0),
+                    metadata=metadata,
+                )
+            )
+        safe_log(f"User memory search completed, collection={client.collection_name}, resultCount={len(results)}")
+        return MemorySearchResponse(success=True, collection=client.collection_name, results=results)
+    except Exception as exc:
+        safe_log(f"User memory search failed: {safe_error_message(exc)}")
+        return MemorySearchResponse(success=False, collection=request.collection, error_message=safe_error_message(exc))
+
+
+@app.post("/memory/delete-by-source", response_model=MemoryDeleteResponse)
+def delete_memory_by_source(request: MemoryDeleteBySourceRequest) -> MemoryDeleteResponse:
+    try:
+        patient_id_hash = patient_hash_from_filter(request.filter)
+        if not patient_id_hash:
+            return MemoryDeleteResponse(
+                success=False,
+                collection=request.collection,
+                error_message="patientIdHash filter is required",
+            )
+        client = ensure_user_memory_client(request.collection)
+        deleted_count = client.delete_by_source(patient_id_hash, request.sourceId, request.sourceType)
+        safe_log(f"User memory delete-by-source completed, collection={client.collection_name}, deletedCount={deleted_count}")
+        return MemoryDeleteResponse(success=True, collection=client.collection_name, deleted_count=deleted_count)
+    except Exception as exc:
+        safe_log(f"User memory delete-by-source failed: {safe_error_message(exc)}")
+        return MemoryDeleteResponse(success=False, collection=request.collection, error_message=safe_error_message(exc))
+
+
+@app.get("/memory/health", response_model=MemoryHealthResponse)
+def memory_health() -> MemoryHealthResponse:
+    collection = USER_MEMORY_COLLECTION_NAME
+    try:
+        client = UserMemoryMilvus(MILVUS_HOST, MILVUS_PORT, collection)
+        client.connect()
+        exists = client.has_collection()
+        return MemoryHealthResponse(success=True, collection=collection, collection_exists=exists)
+    except Exception as exc:
+        return MemoryHealthResponse(
+            success=False,
+            collection=collection,
+            collection_exists=False,
+            error_message=safe_error_message(exc),
+        )
 
 
 def main() -> None:

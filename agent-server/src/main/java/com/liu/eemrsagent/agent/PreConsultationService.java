@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class PreConsultationService {
@@ -111,7 +112,9 @@ public class PreConsultationService {
             QuestionPlan questionPlan
     ) {
         List<LlmMessage> messages = new ArrayList<>();
-        messages.add(new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(mode, round), ragContext, questionPlan)));
+        String memoryContext = formatMemoryContext(request.memoryContext());
+        String basePrompt = buildSystemPrompt(mode, round) + memoryContext;
+        messages.add(new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(basePrompt, ragContext, questionPlan)));
         List<PreConsultationRequest.Message> history = request.safeHistory();
         int start = Math.max(0, history.size() - 8);
         for (PreConsultationRequest.Message message : history.subList(start, history.size())) {
@@ -126,6 +129,72 @@ public class PreConsultationService {
         }
         messages.add(new LlmMessage("user", truncate(input, 1200)));
         return messages;
+    }
+
+    private String formatMemoryContext(PreConsultationRequest.MemoryContext memoryContext) {
+        if (memoryContext == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("\n\n【长期健康档案】\n");
+        appendMap(builder, memoryContext.longTermMemory(), 12);
+        builder.append("\n【近期就诊记忆】\n");
+        appendList(builder, memoryContext.mediumTermMemory(), 8);
+        builder.append("\n【本次问诊状态】\n");
+        appendMap(builder, memoryContext.shortTermMemory(), 12);
+        builder.append("\n【用户历史相似记忆】\n");
+        appendList(builder, memoryContext.relatedUserMemory(), 5);
+        builder.append("\n【医学知识库 RAG】\n医学知识库内容见下方 RAG 检索知识分区。");
+        return truncate(builder.toString(), 5000);
+    }
+
+    private void appendMap(StringBuilder builder, Map<String, Object> data, int maxItems) {
+        if (data == null || data.isEmpty()) {
+            builder.append("- 未记录\n");
+            return;
+        }
+        int count = 0;
+        for (Map.Entry<String, Object> entry : data.entrySet()) {
+            if (count >= maxItems) {
+                break;
+            }
+            Object value = entry.getValue();
+            if (value == null || String.valueOf(value).isBlank()) {
+                continue;
+            }
+            builder.append("- ").append(entry.getKey()).append("：")
+                    .append(truncate(String.valueOf(value), 500)).append("\n");
+            count++;
+        }
+        if (count == 0) {
+            builder.append("- 未记录\n");
+        }
+    }
+
+    private void appendList(StringBuilder builder, List<Map<String, Object>> items, int maxItems) {
+        if (items == null || items.isEmpty()) {
+            builder.append("- 未记录\n");
+            return;
+        }
+        int count = 0;
+        for (Map<String, Object> item : items) {
+            if (item == null || count >= maxItems) {
+                continue;
+            }
+            Object summary = item.get("summary");
+            if (summary == null) {
+                summary = item.get("text");
+            }
+            if (summary == null) {
+                summary = item;
+            }
+            builder.append(count + 1).append(". ")
+                    .append(truncate(String.valueOf(summary), 700)).append("\n");
+            count++;
+        }
+        if (count == 0) {
+            builder.append("- 未记录\n");
+        }
     }
 
     private RagState retrieveRag(String input, String mode) {

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liu.eemrsserver.mapper.UserHealthProfileMapper">
+    <select id="findByPatientIdHash" resultType="com.liu.eemrsserver.memory.domain.UserHealthProfile">
+        select * from user_health_profile
+        where patient_id_hash = #{patientIdHash}
+          and active = 1
+        limit 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into user_health_profile(
+            patient_id_hash,
+            id_number_hash,
+            gender,
+            birth_date,
+            height_cm,
+            weight_kg,
+            blood_type,
+            special_status,
+            source,
+            confirmed,
+            active
+        ) values (
+            #{patientIdHash},
+            #{idNumberHash},
+            #{gender},
+            #{birthDate},
+            #{heightCm},
+            #{weightKg},
+            #{bloodType},
+            #{specialStatus},
+            #{source},
+            #{confirmed},
+            #{active}
+        )
+    </insert>
+
+    <update id="updateByPatientIdHash">
+        update user_health_profile
+        set id_number_hash = #{idNumberHash},
+            gender = #{gender},
+            birth_date = #{birthDate},
+            height_cm = #{heightCm},
+            weight_kg = #{weightKg},
+            blood_type = #{bloodType},
+            special_status = #{specialStatus},
+            source = #{source},
+            confirmed = #{confirmed},
+            active = #{active}
+        where patient_id_hash = #{patientIdHash}
+    </update>
+
+    <update id="softDeleteByPatientIdHash">
+        update user_health_profile
+        set active = 0
+        where patient_id_hash = #{patientIdHash}
+    </update>
+</mapper>

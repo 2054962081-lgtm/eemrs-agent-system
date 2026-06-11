@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .rag_config import MILVUS_COLLECTION_NAME, MILVUS_HOST, MILVUS_PORT, milvus_uri
+from .rag_config import MILVUS_COLLECTION_NAME, MILVUS_HOST, MILVUS_PORT, USER_MEMORY_COLLECTION_NAME, milvus_uri
 from .rag_schema import MILVUS_OUTPUT_FIELDS
 
 
@@ -171,3 +171,114 @@ def json_quote(value: str) -> str:
     import json
 
     return json.dumps(value, ensure_ascii=False)
+
+
+class UserMemoryMilvus:
+    def __init__(
+        self,
+        host: str = MILVUS_HOST,
+        port: str = MILVUS_PORT,
+        collection_name: str = USER_MEMORY_COLLECTION_NAME,
+    ):
+        self.host = host
+        self.port = str(port)
+        self.collection_name = collection_name
+        try:
+            from pymilvus import DataType, MilvusClient
+        except ImportError as exc:
+            raise RuntimeError("未安装 pymilvus，请先执行 pip install -r requirements-rag.txt。") from exc
+        self.DataType = DataType
+        self.MilvusClient = MilvusClient
+        self.client = None
+
+    def connect(self) -> None:
+        uri = milvus_uri(self.host, self.port)
+        self.client = self.MilvusClient(uri=uri)
+        self.client.list_collections()
+
+    def has_collection(self) -> bool:
+        self._ensure_connected()
+        return self.client.has_collection(self.collection_name)
+
+    def ensure_collection(self, embedding_dim: int) -> None:
+        self._ensure_connected()
+        if self.has_collection():
+            return
+        schema = self.client.create_schema(auto_id=False, enable_dynamic_field=False)
+        schema.add_field("memory_id", self.DataType.VARCHAR, is_primary=True, max_length=128)
+        schema.add_field("patientIdHash", self.DataType.VARCHAR, max_length=128)
+        schema.add_field("memoryLevel", self.DataType.VARCHAR, max_length=32)
+        schema.add_field("sourceType", self.DataType.VARCHAR, max_length=64)
+        schema.add_field("sourceId", self.DataType.VARCHAR, max_length=128)
+        schema.add_field("department", self.DataType.VARCHAR, max_length=128)
+        schema.add_field("eventTime", self.DataType.INT64)
+        schema.add_field("createdAt", self.DataType.INT64)
+        schema.add_field("text", self.DataType.VARCHAR, max_length=16000)
+        schema.add_field("embedding", self.DataType.FLOAT_VECTOR, dim=embedding_dim)
+
+        index_params = self.client.prepare_index_params()
+        try:
+            index_params.add_index("embedding", index_type="AUTOINDEX", metric_type="COSINE")
+        except Exception:
+            index_params.add_index(
+                "embedding",
+                index_type="HNSW",
+                metric_type="COSINE",
+                params={"M": 16, "efConstruction": 200},
+            )
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            schema=schema,
+            index_params=index_params,
+        )
+
+    def upsert(self, row: dict[str, Any]) -> int:
+        self._ensure_connected()
+        self.ensure_collection(len(row["embedding"]))
+        source_id = str(row.get("sourceId") or "")
+        patient_id_hash = str(row.get("patientIdHash") or "")
+        if source_id:
+            self.delete_by_source(patient_id_hash, source_id)
+        result = self.client.insert(collection_name=self.collection_name, data=[row])
+        self.client.flush(self.collection_name)
+        return int(result.get("insert_count", 1)) if isinstance(result, dict) else 1
+
+    def search(self, vector: list[float], patient_id_hash: str, top_k: int) -> list[dict[str, Any]]:
+        self._ensure_connected()
+        self.ensure_collection(len(vector))
+        self.client.load_collection(self.collection_name)
+        return self.client.search(
+            collection_name=self.collection_name,
+            data=[vector],
+            anns_field="embedding",
+            limit=top_k,
+            filter=f"patientIdHash == {json_quote(patient_id_hash)}",
+            output_fields=[
+                "memory_id",
+                "patientIdHash",
+                "memoryLevel",
+                "sourceType",
+                "sourceId",
+                "department",
+                "eventTime",
+                "createdAt",
+                "text",
+            ],
+            search_params={"metric_type": "COSINE", "params": {}},
+        )[0]
+
+    def delete_by_source(self, patient_id_hash: str, source_id: str, source_type: str | None = None) -> int:
+        self._ensure_connected()
+        if not self.has_collection():
+            return 0
+        filter_expr = f"patientIdHash == {json_quote(patient_id_hash)} and sourceId == {json_quote(source_id)}"
+        if source_type:
+            filter_expr += f" and sourceType == {json_quote(source_type)}"
+        result = self.client.delete(collection_name=self.collection_name, filter=filter_expr)
+        if isinstance(result, dict):
+            return int(result.get("delete_count", 0) or result.get("delete_cnt", 0) or 0)
+        return 0
+
+    def _ensure_connected(self) -> None:
+        if self.client is None:
+            raise RuntimeError("Milvus client is not connected. Call connect() first.")

@@ -1,4 +1,5 @@
 import request from './request'
+import type { MemoryContext } from './memory'
 
 export interface AgentMessage {
   role: 'user' | 'assistant'
@@ -11,6 +12,7 @@ export interface PreConsultationRequest {
   question: string
   round?: number
   history?: AgentMessage[]
+  memoryContext?: MemoryContext
 }
 
 export interface PreConsultationResponse {
