@@ -12,6 +12,7 @@ public record RagRetrieveResponse(
         @JsonProperty("doc_type_counts") Map<String, Integer> docTypeCounts,
         @JsonProperty("used_query_expansion") Boolean usedQueryExpansion,
         List<RagChunk> chunks,
+        @JsonProperty("trace_meta") Map<String, Object> traceMeta,
         @JsonProperty("error_message") String errorMessage
 ) {
 }

@@ -3,12 +3,14 @@ package com.liu.eemrsagent.rag;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import com.liu.eemrsagent.trace.TraceContext;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,6 +68,30 @@ class RagRetrievalClientTest {
         List<RagChunk> chunks = new RagRetrievalClient(properties(20)).retrieve("胸痛", RagRetrievalClient.SCENE_PRE_INQUIRY);
 
         assertThat(chunks).isEmpty();
+    }
+
+    @Test
+    void propagatesTraceHeadersToRagService() throws Exception {
+        AtomicReference<String> runHeader = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/rag/retrieve", exchange -> {
+            runHeader.set(exchange.getRequestHeaders().getFirst("X-Agent-Run-Id"));
+            byte[] bytes = """
+                    {"success":true,"query":"q","chunks":[],"error_message":null}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream output = exchange.getResponseBody()) {
+                output.write(bytes);
+            }
+        });
+        server.start();
+
+        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-1", "run-1", "session-1", "step-1", null, "agent"))) {
+            new RagRetrievalClient(properties(1000)).retrieve("胸痛", RagRetrievalClient.SCENE_PRE_INQUIRY);
+        }
+
+        assertThat(runHeader.get()).isEqualTo("run-1");
     }
 
     private RagProperties properties(int timeoutMs) {

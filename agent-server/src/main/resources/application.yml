@@ -10,6 +10,22 @@ spring:
     password: ${AGENT_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+agent:
+  trace:
+    enabled: ${AGENT_TRACE_ENABLED:true}
+    persistence-enabled: ${AGENT_TRACE_PERSISTENCE_ENABLED:true}
+    payload-enabled: ${AGENT_TRACE_PAYLOAD_ENABLED:false}
+    payload-max-length: ${AGENT_TRACE_PAYLOAD_MAX_LENGTH:4000}
+    summary-max-length: ${AGENT_TRACE_SUMMARY_MAX_LENGTH:1000}
+    async-enabled: ${AGENT_TRACE_ASYNC_ENABLED:true}
+    retention-days: ${AGENT_TRACE_RETENTION_DAYS:30}
+    user-hash-salt: ${AGENT_TRACE_HASH_SALT:}
+    cost:
+      enabled: ${AGENT_TRACE_COST_ENABLED:false}
+      currency: ${AGENT_TRACE_COST_CURRENCY:CNY}
+      config-version: ${AGENT_TRACE_COST_CONFIG_VERSION:v1}
+      models: {}
+
 llm:
   default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}
 

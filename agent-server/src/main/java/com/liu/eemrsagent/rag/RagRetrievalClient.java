@@ -6,6 +6,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import com.liu.eemrsagent.trace.TraceContext;
+import com.liu.eemrsagent.trace.TraceHeaders;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -42,6 +44,16 @@ public class RagRetrievalClient {
                     .post()
                     .uri(properties.getRetrievePath())
                     .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> TraceContext.current().ifPresent(context -> {
+                        headers.set(TraceHeaders.TRACE_ID, context.traceId());
+                        headers.set(TraceHeaders.RUN_ID, context.runId());
+                        if (context.currentStepId() != null) {
+                            headers.set(TraceHeaders.STEP_ID, context.currentStepId());
+                        }
+                        if (context.sessionId() != null) {
+                            headers.set(TraceHeaders.SESSION_ID, context.sessionId());
+                        }
+                    }))
                     .body(new RagRetrieveRequest(query, topKForScene(scene), includeDocTypesForScene(scene), scene))
                     .retrieve()
                     .body(RagRetrieveResponse.class);

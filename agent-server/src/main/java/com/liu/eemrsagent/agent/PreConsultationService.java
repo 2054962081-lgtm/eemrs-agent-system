@@ -14,6 +14,13 @@ import com.liu.eemrsagent.rag.QuestionPlanBuilder;
 import com.liu.eemrsagent.rag.RagPromptBuilder;
 import com.liu.eemrsagent.rag.RagProperties;
 import com.liu.eemrsagent.rag.RagRetrievalClient;
+import com.liu.eemrsagent.trace.AgentTraceRecorder;
+import com.liu.eemrsagent.trace.TraceErrorCode;
+import com.liu.eemrsagent.trace.TraceRunScope;
+import com.liu.eemrsagent.trace.TraceRunStart;
+import com.liu.eemrsagent.trace.TraceStepData;
+import com.liu.eemrsagent.trace.TraceStepScope;
+import com.liu.eemrsagent.trace.TraceStepType;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -30,6 +37,7 @@ public class PreConsultationService {
     private final RagProperties ragProperties;
     private final QuestionPlanBuilder questionPlanBuilder;
     private final MustAskCoveragePostProcessor postProcessor;
+    private final AgentTraceRecorder traceRecorder;
 
     public PreConsultationService(
             LlmClientFactory llmClientFactory,
@@ -38,7 +46,8 @@ public class PreConsultationService {
             RagPromptBuilder ragPromptBuilder,
             RagProperties ragProperties,
             QuestionPlanBuilder questionPlanBuilder,
-            MustAskCoveragePostProcessor postProcessor
+            MustAskCoveragePostProcessor postProcessor,
+            AgentTraceRecorder traceRecorder
     ) {
         this.llmClientFactory = llmClientFactory;
         this.ragRetrievalClient = ragRetrievalClient;
@@ -47,6 +56,7 @@ public class PreConsultationService {
         this.ragProperties = ragProperties;
         this.questionPlanBuilder = questionPlanBuilder;
         this.postProcessor = postProcessor;
+        this.traceRecorder = traceRecorder;
     }
 
     public PreConsultationResponse ask(PreConsultationRequest request) {
@@ -55,52 +65,88 @@ public class PreConsultationService {
         int round = request.safeRound();
         String purpose = LlmClientFactory.PURPOSE_PRE_CONSULTATION;
         LlmProviderType provider = llmClientFactory.providerForPurpose(purpose);
-        RagState ragState = retrieveRag(input, mode);
-        List<LlmMessage> messages = buildMessages(request, mode, input, round, ragState.ragContext(), ragState.questionPlan());
-        LlmChatRequest chatRequest = new LlmChatRequest(
-                messages,
-                purpose,
-                0.2,
-                0.8,
-                2048,
-                false,
-                false
-        );
+        try (TraceRunScope run = traceRecorder.startRun(new TraceRunStart(
+                request.sessionId(),
+                request.sessionId(),
+                "deep-preconsultation-agent",
+                mode + "-pre-consultation",
+                "preconsultation-" + mode + "-v1",
+                "medical-rag-v1",
+                null,
+                Map.of("mode", mode, "round", round, "history_size", request.safeHistory().size())
+        ))) {
+            recordUserInput(input, mode, round);
+            recordSessionState(request);
+            RagState ragState = retrieveRag(input, mode);
+            List<LlmMessage> messages = buildMessages(request, mode, input, round, ragState.ragContext(), ragState.questionPlan());
+            LlmChatRequest chatRequest = new LlmChatRequest(
+                    messages,
+                    purpose,
+                    0.2,
+                    0.8,
+                    2048,
+                    false,
+                    false
+            );
+            recordModelRequest(chatRequest, provider);
 
-        LlmChatResponse response;
-        try {
-            response = llmClientFactory.chatForPurpose(purpose, chatRequest);
-        } catch (LlmException e) {
-            return PreConsultationResponse.fail(mode, round, "", provider.value(), e.getMessage());
+            LlmChatResponse response;
+            try {
+                response = llmClientFactory.chatForPurpose(purpose, chatRequest);
+            } catch (LlmException e) {
+                traceRecorder.startStep(TraceStepType.MODEL_RESPONSE, "model call failed", null, null)
+                        .fail(TraceErrorCode.MODEL_HTTP_ERROR.name(), e.getMessage());
+                run.fail(TraceErrorCode.MODEL_HTTP_ERROR.name(), e.getMessage());
+                return PreConsultationResponse.fail(mode, round, "", provider.value(), e.getMessage());
+            }
+            run.updateModel(response.model());
+            recordModelResponse(response);
+
+            MustAskCoveragePostProcessor.PostProcessResult postProcess;
+            try (TraceStepScope step = traceRecorder.startStep(TraceStepType.POST_PROCESS, "must ask coverage post process",
+                    response.content(), Map.of("question_plan_has_content", ragState.questionPlan().hasContent()))) {
+                postProcess = postProcessor.process(response.content(), ragState.questionPlan());
+                step.success(TraceStepData.of(response.content(), postProcess.reply(), Map.of(
+                        "coverage_before", postProcess.coverageBefore(),
+                        "coverage_after", postProcess.coverageAfter(),
+                        "added_question_count", postProcess.addedQuestionCount(),
+                        "used_post_process", postProcess.usedPostProcess()
+                )));
+            } catch (RuntimeException e) {
+                run.fail(TraceErrorCode.POST_PROCESS_FAILED.name(), e.getMessage());
+                throw e;
+            }
+            String reply = postProcess.reply();
+            boolean finished = isFinished(mode, round, input, reply);
+            recordFollowUpDecision(finished, mode, round, postProcess);
+            PreConsultationResponse finalResponse = PreConsultationResponse.ok(
+                    mode,
+                    reply,
+                    finished,
+                    round,
+                    extractRecommendedDepartment(reply),
+                    extractUrgency(reply),
+                    response.model(),
+                    response.provider(),
+                    new PreConsultationRagDebug(
+                            ragState.questionPlan().keyQuestions(),
+                            ragState.questionPlan().redFlags(),
+                            ragState.questionPlan().urgencyLevel(),
+                            ragState.questionPlan().recommendedDepartments(),
+                            ragState.retrievalResult().expandedQuery(),
+                            ragState.retrievalResult().docTypeCounts(),
+                            postProcess.coverageBefore(),
+                            postProcess.coverageAfter(),
+                            postProcess.addedQuestionCount(),
+                            ragState.questionPlan().hasContent(),
+                            ragState.retrievalResult().usedQueryExpansion(),
+                            postProcess.usedPostProcess()
+                    )
+            );
+            recordFinalAnswer(finalResponse);
+            run.success(reply, response.promptTokens(), response.completionTokens(), response.totalTokens());
+            return finalResponse;
         }
-
-        MustAskCoveragePostProcessor.PostProcessResult postProcess = postProcessor.process(response.content(), ragState.questionPlan());
-        String reply = postProcess.reply();
-        boolean finished = isFinished(mode, round, input, reply);
-        return PreConsultationResponse.ok(
-                mode,
-                reply,
-                finished,
-                round,
-                extractRecommendedDepartment(reply),
-                extractUrgency(reply),
-                response.model(),
-                response.provider(),
-                new PreConsultationRagDebug(
-                        ragState.questionPlan().keyQuestions(),
-                        ragState.questionPlan().redFlags(),
-                        ragState.questionPlan().urgencyLevel(),
-                        ragState.questionPlan().recommendedDepartments(),
-                        ragState.retrievalResult().expandedQuery(),
-                        ragState.retrievalResult().docTypeCounts(),
-                        postProcess.coverageBefore(),
-                        postProcess.coverageAfter(),
-                        postProcess.addedQuestionCount(),
-                        ragState.questionPlan().hasContent(),
-                        ragState.retrievalResult().usedQueryExpansion(),
-                        postProcess.usedPostProcess()
-                )
-        );
     }
 
     private List<LlmMessage> buildMessages(
@@ -199,10 +245,112 @@ public class PreConsultationService {
 
     private RagState retrieveRag(String input, String mode) {
         String scene = "deep".equals(mode) ? RagRetrievalClient.SCENE_DEEP_INQUIRY : RagRetrievalClient.SCENE_PRE_INQUIRY;
-        RagRetrievalResult result = ragRetrievalClient.retrieveWithMetadata(input, scene);
+        String expandedOrRaw = input == null ? "" : input;
+        try (TraceStepScope ignored = traceRecorder.startStep(TraceStepType.RAG_QUERY_BUILD, "build rag query",
+                Map.of("input_hash_only", true, "mode", mode), Map.of("scene", scene))) {
+            ignored.success(Map.of("scene", scene, "top_k", ragProperties.getTopK()));
+        }
+        RagRetrievalResult result;
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.RAG_REQUEST, "call rag retrieval service",
+                Map.of("scene", scene, "query", expandedOrRaw), Map.of("service_url", ragProperties.getServiceUrl()))) {
+            result = ragRetrievalClient.retrieveWithMetadata(input, scene);
+            step.success(TraceStepData.of(null, Map.of(
+                    "result_count", result.chunks().size(),
+                    "used_query_expansion", result.usedQueryExpansion(),
+                    "expanded_query", result.expandedQuery()
+            ), Map.of("doc_type_counts", result.docTypeCounts())));
+        }
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.RAG_RETRIEVAL, "rag retrieval results",
+                null, Map.of("scene", scene))) {
+            step.success(TraceStepData.of(null, result.chunks().stream()
+                    .map(chunk -> Map.of(
+                            "chunk_id", chunk.chunkId(),
+                            "doc_type", chunk.docType(),
+                            "score", chunk.score(),
+                            "title", chunk.title()))
+                    .toList(), Map.of(
+                    "result_count", result.chunks().size(),
+                    "doc_type_counts", result.docTypeCounts(),
+                    "rag_version", "medical-rag-v1"
+            )));
+        }
         String context = ragContextFormatter.format(result.chunks(), ragProperties.getMaxContextChars());
-        QuestionPlan questionPlan = questionPlanBuilder.build(result.chunks(), mode, input);
+        QuestionPlan questionPlan;
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.QUESTION_PLAN, "build question plan",
+                Map.of("chunk_count", result.chunks().size(), "mode", mode), null)) {
+            questionPlan = questionPlanBuilder.build(result.chunks(), mode, input);
+            step.success(TraceStepData.of(null, questionPlan, Map.of(
+                    "has_content", questionPlan.hasContent(),
+                    "key_question_count", questionPlan.keyQuestions().size(),
+                    "red_flag_count", questionPlan.redFlags().size()
+            )));
+        }
         return new RagState(context, questionPlan, result);
+    }
+
+    private void recordUserInput(String input, String mode, int round) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.USER_INPUT, "pre-consultation user input",
+                Map.of("input", input == null ? "" : input), Map.of("mode", mode, "round", round))) {
+            step.success(Map.of("input_length", input == null ? 0 : input.length()));
+        }
+    }
+
+    private void recordSessionState(PreConsultationRequest request) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.SESSION_STATE, "read conversation state",
+                null, Map.of("history_size", request.safeHistory().size()))) {
+            step.success(Map.of(
+                    "history_size", request.safeHistory().size(),
+                    "has_memory_context", request.memoryContext() != null
+            ));
+        }
+    }
+
+    private void recordModelRequest(LlmChatRequest chatRequest, LlmProviderType provider) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.MODEL_REQUEST, "build model request",
+                Map.of("message_count", chatRequest.messages().size(), "purpose", chatRequest.purpose()),
+                Map.of("provider", provider.value(), "stream", chatRequest.stream()))) {
+            step.success(Map.of("max_tokens", chatRequest.maxTokens(), "temperature", chatRequest.temperature()));
+        }
+    }
+
+    private void recordModelResponse(LlmChatResponse response) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.MODEL_RESPONSE, "model response",
+                null, Map.of("provider", response.provider(), "model", response.model()))) {
+            step.success(new TraceStepData(
+                    null,
+                    response.content(),
+                    Map.of("content_length", response.content() == null ? 0 : response.content().length()),
+                    response.model(),
+                    null,
+                    response.promptTokens(),
+                    response.completionTokens(),
+                    response.totalTokens()
+            ));
+        }
+    }
+
+    private void recordFollowUpDecision(boolean finished, String mode, int round,
+                                        MustAskCoveragePostProcessor.PostProcessResult postProcess) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.FOLLOW_UP_DECISION, "follow-up decision",
+                null, Map.of("mode", mode, "round", round))) {
+            step.success(Map.of(
+                    "need_follow_up", !finished,
+                    "reason_code", finished ? "ENOUGH_INFORMATION_OR_ROUND_LIMIT" : "NEED_MORE_INFORMATION",
+                    "coverage_after", postProcess.coverageAfter()
+            ));
+        }
+    }
+
+    private void recordFinalAnswer(PreConsultationResponse response) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.FINAL_ANSWER, "final answer",
+                null, Map.of("finished", response.finished()))) {
+            step.success(Map.of(
+                    "finished", response.finished(),
+                    "recommended_department", response.recommendedDepartment(),
+                    "urgency", response.urgency(),
+                    "reply", response.reply()
+            ));
+        }
     }
 
     private record RagState(String ragContext, QuestionPlan questionPlan, RagRetrievalResult retrievalResult) {

@@ -1,0 +1,20 @@
+package com.liu.eemrsagent.trace;
+
+public enum TraceStepType {
+    USER_INPUT,
+    INTENT_RECOGNITION,
+    SESSION_STATE,
+    RAG_QUERY_BUILD,
+    RAG_REQUEST,
+    RAG_RETRIEVAL,
+    QUESTION_PLAN,
+    MODEL_REQUEST,
+    MODEL_RESPONSE,
+    POST_PROCESS,
+    FOLLOW_UP_DECISION,
+    TOOL_DECISION,
+    TOOL_CALL,
+    FINAL_ANSWER,
+    GUARDRAIL,
+    ERROR
+}

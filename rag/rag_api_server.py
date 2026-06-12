@@ -15,7 +15,7 @@ from collections import Counter, OrderedDict
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, Response
 from pydantic import BaseModel, Field
 
 from .embedding_provider import EmbeddingProvider
@@ -73,6 +73,7 @@ class RetrieveResponse(BaseModel):
     doc_type_counts: dict[str, int] = {}
     used_query_expansion: bool = False
     chunks: list[RetrieveChunk] = []
+    trace_meta: dict[str, Any] = {}
     error_message: str | None = None
 
 
@@ -176,6 +177,26 @@ def patient_hash_from_filter(filter_expr: str) -> str | None:
         return None
     match = re.search(r"patientIdHash\s*==\s*(['\"])([^'\"]+)\1", filter_expr)
     return match.group(2) if match else None
+
+
+def build_trace_meta(
+    trace_id: str | None,
+    run_id: str | None,
+    step_id: str | None,
+    session_id: str | None,
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            "trace_id": trace_id,
+            "run_id": run_id,
+            "step_id": step_id,
+            "session_id": session_id,
+            "service": "medical-rag",
+            "rag_version": "medical-rag-v1",
+        }.items()
+        if value
+    }
 
 
 def ensure_user_memory_client(collection: str) -> UserMemoryMilvus:
@@ -340,7 +361,23 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/rag/retrieve", response_model=RetrieveResponse)
-def retrieve(request: RetrieveRequest) -> RetrieveResponse:
+def retrieve(
+    request: RetrieveRequest,
+    response: Response,
+    x_agent_trace_id: str | None = Header(default=None),
+    x_agent_run_id: str | None = Header(default=None),
+    x_agent_step_id: str | None = Header(default=None),
+    x_agent_session_id: str | None = Header(default=None),
+) -> RetrieveResponse:
+    trace_meta = build_trace_meta(x_agent_trace_id, x_agent_run_id, x_agent_step_id, x_agent_session_id)
+    for header_name, header_value in {
+        "X-Agent-Trace-Id": x_agent_trace_id,
+        "X-Agent-Run-Id": x_agent_run_id,
+        "X-Agent-Step-Id": x_agent_step_id,
+        "X-Agent-Session-Id": x_agent_session_id,
+    }.items():
+        if header_value:
+            response.headers[header_name] = header_value
     if provider is None or milvus is None:
         return RetrieveResponse(success=False, query=request.query, error_message="RAG 服务尚未连接 Milvus")
     if not milvus.has_collection():
@@ -390,6 +427,11 @@ def retrieve(request: RetrieveRequest) -> RetrieveResponse:
             doc_type_counts=dict(Counter(chunk.doc_type or "unknown" for chunk in chunks)),
             used_query_expansion=expanded_query != request.query,
             chunks=chunks,
+            trace_meta={
+                **trace_meta,
+                "result_count": len(chunks),
+                "doc_type_counts": dict(Counter(chunk.doc_type or "unknown" for chunk in chunks)),
+            },
         )
     except Exception as exc:
         return RetrieveResponse(success=False, query=request.query, error_message=str(exc))
