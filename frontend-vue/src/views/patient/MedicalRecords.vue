@@ -4,6 +4,8 @@ import { ElMessage } from 'element-plus'
 import PageContainer from '../../components/PageContainer.vue'
 import DataCard from '../../components/DataCard.vue'
 import EmptyState from '../../components/EmptyState.vue'
+import ReportTrendAnalysisPanel from '../../components/ReportTrendAnalysisPanel.vue'
+import { useAuthStore } from '../../stores/auth'
 import { queryMedicalRecords } from '../../api/medicalRecord'
 import { queryLabReportsByDepartmentTime, type LabReport, type LabReportSearchResponse } from '../../api/labReport'
 import type { VisitInfo } from '../../api/types'
@@ -21,6 +23,7 @@ const reportQuery = reactive({
   department: '',
   queryTime: new Date().toISOString().slice(0, 10),
 })
+const authStore = useAuthStore()
 
 function toMillis(value?: string) {
   return value ? new Date(value).getTime() : undefined
@@ -149,6 +152,8 @@ function openReportDetail(row: LabReport) {
             <el-descriptions-item label="报告时间">{{ formatTime(reportResult.latestReport.reportTime) }}</el-descriptions-item>
           </el-descriptions>
         </DataCard>
+
+        <ReportTrendAnalysisPanel :patient-id="authStore.idNumber" role="patient" />
 
         <div class="table-card">
           <el-table v-loading="reportLoading" :data="reportResult.historyReports" empty-text="暂无报告">

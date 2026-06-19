@@ -2,8 +2,13 @@ package com.liu.eemrsagent.agent;
 
 import com.liu.eemrsagent.common.ApiResponse;
 import com.liu.eemrsagent.llm.LlmProperties;
+import com.liu.eemrsagent.reporttrend.ReportTrendAnalysisRequest;
+import com.liu.eemrsagent.reporttrend.ReportTrendAnalysisResponse;
+import com.liu.eemrsagent.reporttrend.ReportTrendAnalysisService;
+import com.liu.eemrsagent.reporttrend.ReportAnalysisResultRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,15 +22,21 @@ import java.util.Map;
 public class AgentController {
 
     private final PreConsultationService preConsultationService;
+    private final ReportTrendAnalysisService reportTrendAnalysisService;
+    private final ReportAnalysisResultRepository reportAnalysisResultRepository;
     private final LlmProperties llmProperties;
     private final JdbcTemplate jdbcTemplate;
 
     public AgentController(
             PreConsultationService preConsultationService,
+            ReportTrendAnalysisService reportTrendAnalysisService,
+            ReportAnalysisResultRepository reportAnalysisResultRepository,
             LlmProperties llmProperties,
             JdbcTemplate jdbcTemplate
     ) {
         this.preConsultationService = preConsultationService;
+        this.reportTrendAnalysisService = reportTrendAnalysisService;
+        this.reportAnalysisResultRepository = reportAnalysisResultRepository;
         this.llmProperties = llmProperties;
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -50,6 +61,18 @@ public class AgentController {
     @PostMapping("/pre-consultation")
     public ApiResponse<PreConsultationResponse> preConsultation(@RequestBody PreConsultationRequest request) {
         return ApiResponse.ok(preConsultationService.ask(request));
+    }
+
+    @PostMapping("/report-trend/analyze")
+    public ApiResponse<ReportTrendAnalysisResponse> reportTrendAnalyze(@RequestBody ReportTrendAnalysisRequest request) {
+        return ApiResponse.ok(reportTrendAnalysisService.analyze(request));
+    }
+
+    @GetMapping("/report-trend/{analysisId}")
+    public ApiResponse<ReportTrendAnalysisResponse> getReportTrendAnalysis(@PathVariable String analysisId) {
+        return reportAnalysisResultRepository.findResponseByAnalysisId(analysisId)
+                .map(ApiResponse::ok)
+                .orElseGet(() -> ApiResponse.fail("REPORT_TREND_ANALYSIS_NOT_FOUND"));
     }
 
     private Map<String, Object> databaseStatus() {

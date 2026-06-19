@@ -1,0 +1,13 @@
+{
+  "summary": {
+    "total_cases": 12,
+    "passed_cases": 12,
+    "failed_cases": 0
+  },
+  "failure_stage_distribution": {},
+  "bad_cases": [],
+  "privacy_notes": [
+    "评测输出仅包含 case_id、指标代码、趋势方向、脱敏上下文标签和 Trace 元数据。",
+    "报告中未写入完整报告原文、完整问诊原文、身份证号、手机号、密文、密钥或鉴权信息。"
+  ]
+}

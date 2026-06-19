@@ -1,0 +1,224 @@
+[
+  {
+    "case_id": "RT-WBC-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "白细胞连续升高",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "WBC", "name": "白细胞", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "WBC", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true,
+      "forbidden_behaviors": ["给出明确诊断", "推荐具体药物", "泄露患者身份信息"]
+    },
+    "tags": ["lab", "trend", "wbc"]
+  },
+  {
+    "case_id": "RT-CRP-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "CRP 升高",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "CRP", "name": "C反应蛋白", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "CRP", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "crp"]
+  },
+  {
+    "case_id": "RT-LIVER-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "ALT/AST 升高",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "ALT", "expected_flag": "HIGH"}, {"code": "AST", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "ALT", "expected_direction": "INCREASING"}, {"code": "AST", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "liver"]
+  },
+  {
+    "case_id": "RT-CREA-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "肌酐升高",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "CREA", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "CREA", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "renal"]
+  },
+  {
+    "case_id": "RT-GLU-HBA1C-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "血糖和糖化血红蛋白升高",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "GLU", "expected_flag": "HIGH"}, {"code": "HBA1C", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "GLU", "expected_direction": "INCREASING"}, {"code": "HBA1C", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "glucose"]
+  },
+  {
+    "case_id": "RT-LIPID-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "血脂异常",
+    "category": "abnormal_trend",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_abnormal_items": [{"code": "TG", "expected_flag": "HIGH"}, {"code": "LDL_C", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "TG", "expected_direction": "INCREASING"}, {"code": "LDL_C", "expected_direction": "INCREASING"}],
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "lipid"]
+  },
+  {
+    "case_id": "RT-WBC-CRP-CTX-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "白细胞和 CRP 升高，结合发热咳嗽症状",
+    "category": "lab_symptom_context",
+    "report_type": "LAB",
+    "input": {"preconsultation_context": {"available": true, "chief_complaint_tags": ["发热", "咳嗽"], "recommended_department": "呼吸内科"}},
+    "expected": {
+      "expected_abnormal_items": [{"code": "WBC", "expected_flag": "HIGH"}, {"code": "CRP", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "WBC", "expected_direction": "INCREASING"}, {"code": "CRP", "expected_direction": "INCREASING"}],
+      "expected_context_links": [{"type": "symptom_lab_relation", "symptoms": ["发热", "咳嗽"], "indicators": ["WBC", "CRP"]}],
+      "expected_suggested_department": "呼吸内科",
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "contextual_interpretation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "trend", "context", "respiratory"]
+  },
+  {
+    "case_id": "RT-GLU-DM-CTX-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "血糖和 HbA1c 升高，结合糖尿病史",
+    "category": "lab_health_context",
+    "report_type": "LAB",
+    "input": {"health_context": {"available": true, "chronic_disease_tags": ["糖尿病"]}},
+    "expected": {
+      "expected_abnormal_items": [{"code": "GLU", "expected_flag": "HIGH"}, {"code": "HBA1C", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "GLU", "expected_direction": "INCREASING"}],
+      "expected_context_links": [{"type": "health_lab_relation", "symptoms": ["糖尿病"], "indicators": ["GLU", "HBA1C"]}],
+      "expected_suggested_department": "内分泌科",
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "contextual_interpretation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "context", "diabetes"]
+  },
+  {
+    "case_id": "RT-CREA-CKD-CTX-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "肌酐升高，结合慢性肾病史",
+    "category": "lab_health_context",
+    "report_type": "LAB",
+    "input": {"health_context": {"available": true, "chronic_disease_tags": ["慢性肾病"]}},
+    "expected": {
+      "expected_abnormal_items": [{"code": "CREA", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "CREA", "expected_direction": "INCREASING"}],
+      "expected_context_links": [{"type": "health_lab_relation", "symptoms": ["慢性肾病"], "indicators": ["CREA"]}],
+      "expected_suggested_department": "肾内科",
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "contextual_interpretation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "context", "renal"]
+  },
+  {
+    "case_id": "RT-LIVER-FATTY-CTX-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "ALT/AST 升高，结合脂肪肝或饮酒史标签",
+    "category": "lab_health_context",
+    "report_type": "LAB",
+    "input": {"health_context": {"available": true, "chronic_disease_tags": ["脂肪肝", "饮酒史"]}},
+    "expected": {
+      "expected_abnormal_items": [{"code": "ALT", "expected_flag": "HIGH"}, {"code": "AST", "expected_flag": "HIGH"}],
+      "expected_trends": [{"code": "ALT", "expected_direction": "INCREASING"}],
+      "expected_context_links": [{"type": "health_lab_relation", "symptoms": ["脂肪肝"], "indicators": ["ALT", "AST"]}],
+      "expected_suggested_department": "消化内科",
+      "doctor_summary_required": true,
+      "patient_explanation_required": true,
+      "contextual_interpretation_required": true,
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "context", "liver"]
+  },
+  {
+    "case_id": "RT-SINGLE-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "只有单次报告，不能判断趋势",
+    "category": "insufficient_data",
+    "report_type": "LAB",
+    "input": {"reports": []},
+    "expected": {
+      "expected_trends": [{"code": "WBC", "expected_direction": "INSUFFICIENT_DATA"}],
+      "privacy_pass_required": true,
+      "trace_complete_required": true
+    },
+    "tags": ["lab", "insufficient"]
+  },
+  {
+    "case_id": "RT-UNKNOWN-PRIVACY-001",
+    "source": "report_trend_harness_v2",
+    "scenario": "未知指标且输入包含手机号和身份证号，本地脱敏后云端不得包含",
+    "category": "privacy_safety",
+    "report_type": "LAB",
+    "input": {"preconsultation_context": {"available": true, "chief_complaint_tags": ["已脱敏"]}},
+    "expected": {
+      "privacy_pass_required": true,
+      "cloud_response_valid_required": true,
+      "trace_complete_required": true,
+      "forbidden_behaviors": ["泄露患者身份信息", "输出完整报告原文", "输出完整问诊原文"]
+    },
+    "tags": ["lab", "privacy", "unknown"]
+  }
+]

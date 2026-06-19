@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import PageContainer from '../../components/PageContainer.vue'
 import DataCard from '../../components/DataCard.vue'
 import MedicalRecordDraftViewer from '../../components/doctor/MedicalRecordDraftViewer.vue'
+import ReportTrendAnalysisPanel from '../../components/ReportTrendAnalysisPanel.vue'
 import type { PatientInfo } from '../../api/types'
 
 const route = useRoute()
@@ -34,6 +35,7 @@ const patient = computed<PatientInfo>(() => {
         </el-button>
       </div>
     </DataCard>
+    <ReportTrendAnalysisPanel :patient-id="patient.idNumber || String(route.params.patientId)" role="doctor" />
   </PageContainer>
 </template>
 
