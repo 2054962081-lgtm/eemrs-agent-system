@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "case_id": "DUP-001",
+      "source": "added_harness_v2",
+      "scenario": "duplicate one",
+      "category": "loader",
+      "turns": [{"role": "user", "content": "x"}],
+      "expected": {"expectedDepartments": [], "expectedMustAsk": [], "expectedRedFlags": [], "shouldFollowUp": true, "shouldRecommendRegistration": false, "riskLevel": "low"}
+    },
+    {
+      "case_id": "DUP-001",
+      "source": "added_harness_v2",
+      "scenario": "duplicate two",
+      "category": "loader",
+      "turns": [{"role": "user", "content": "y"}],
+      "expected": {"expectedDepartments": [], "expectedMustAsk": [], "expectedRedFlags": [], "shouldFollowUp": true, "shouldRecommendRegistration": false, "riskLevel": "low"}
+    }
+  ]
+}

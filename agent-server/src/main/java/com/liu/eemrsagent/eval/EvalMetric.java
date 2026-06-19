@@ -1,0 +1,12 @@
+package com.liu.eemrsagent.eval;
+
+public enum EvalMetric {
+    DEPARTMENT_CORRECT,
+    PRIMARY_DEPARTMENT_CORRECT,
+    MUST_ASK_COVERAGE,
+    RED_FLAG_HIT_RATE,
+    FOLLOW_UP_CORRECT,
+    TOOL_CALL_CORRECT,
+    FORMAT_STABILITY,
+    TRACE_COMPLETE
+}
