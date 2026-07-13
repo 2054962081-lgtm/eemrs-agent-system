@@ -123,6 +123,8 @@ export interface MedicalRecordDraftDetail {
   id: number
   patientId?: number
   patientIdNumber?: string
+  doctorIdNumber?: string
+  appointmentId?: string
   sessionId?: string
   consultationMode?: string
   sourceType?: string
@@ -131,11 +133,44 @@ export interface MedicalRecordDraftDetail {
   recommendedDepartment?: string
   urgency?: string
   consultationSummary?: string
+  aiRecordJson?: any
+  editedRecordJson?: any
   recordJson?: any
   status?: string
+  modelName?: string
+  promptVersion?: string
+  traceId?: string
   createdAt?: string
   updatedAt?: string
+  firstReviewedAt?: string
+  completedAt?: string
+  appliedAt?: string
   parseError?: boolean
+}
+
+export interface MedicalRecordDraftAuditLog {
+  id: number
+  draftId: number
+  doctorIdNumber?: string
+  action: string
+  beforeJson?: string
+  afterJson?: string
+  rejectReason?: string
+  comment?: string
+  actionTime?: string
+  traceId?: string
+}
+
+export interface MedicalRecordDraftActionResponse {
+  success: boolean
+  message: string
+  draft: MedicalRecordDraftDetail
+  idempotent: boolean
+}
+
+export interface MedicalRecordDraftHistoryResponse {
+  draftId: number
+  logs: MedicalRecordDraftAuditLog[]
 }
 
 export interface LatestMedicalRecordDraftResponse {
@@ -180,6 +215,53 @@ export function getMedicalRecordDraftById(draftId: number | string) {
     {
       timeout: 30000,
     },
+  )
+}
+
+export function saveMedicalRecordDraftEdit(draftId: number | string, editedRecordJson: any, comment?: string) {
+  return request.post<MedicalRecordDraftActionResponse, MedicalRecordDraftActionResponse>(
+    `/agent/medical-record-drafts/${draftId}/edits`,
+    { editedRecordJson, comment },
+    { timeout: 30000 },
+  )
+}
+
+export function acceptMedicalRecordDraft(draftId: number | string, editedRecordJson?: any, comment?: string) {
+  return request.post<MedicalRecordDraftActionResponse, MedicalRecordDraftActionResponse>(
+    `/agent/medical-record-drafts/${draftId}/accept`,
+    { editedRecordJson, comment },
+    { timeout: 30000 },
+  )
+}
+
+export function partialAcceptMedicalRecordDraft(draftId: number | string, editedRecordJson: any, comment?: string) {
+  return request.post<MedicalRecordDraftActionResponse, MedicalRecordDraftActionResponse>(
+    `/agent/medical-record-drafts/${draftId}/partial-accept`,
+    { editedRecordJson, comment },
+    { timeout: 30000 },
+  )
+}
+
+export function rejectMedicalRecordDraft(draftId: number | string, rejectReason: string, editedRecordJson?: any, comment?: string) {
+  return request.post<MedicalRecordDraftActionResponse, MedicalRecordDraftActionResponse>(
+    `/agent/medical-record-drafts/${draftId}/reject`,
+    { editedRecordJson, rejectReason, comment },
+    { timeout: 30000 },
+  )
+}
+
+export function applyMedicalRecordDraft(draftId: number | string, payload: Record<string, unknown> = {}) {
+  return request.post<MedicalRecordDraftActionResponse, MedicalRecordDraftActionResponse>(
+    `/agent/medical-record-drafts/${draftId}/apply`,
+    payload,
+    { timeout: 60000 },
+  )
+}
+
+export function getMedicalRecordDraftHistory(draftId: number | string) {
+  return request.get<MedicalRecordDraftHistoryResponse, MedicalRecordDraftHistoryResponse>(
+    `/agent/medical-record-drafts/${draftId}/history`,
+    { timeout: 30000 },
   )
 }
 

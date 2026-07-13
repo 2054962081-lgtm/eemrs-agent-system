@@ -12,8 +12,13 @@ public record MedicalRecordDraftEntity(
         String urgency,
         String consultationSummary,
         String recordJson,
+        String aiRecordJson,
+        String editedRecordJson,
         String rawModelReply,
         String status,
+        String modelName,
+        String promptVersion,
+        String traceId,
         String createdBy
 ) {
 }
