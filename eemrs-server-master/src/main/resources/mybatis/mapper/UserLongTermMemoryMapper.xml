@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liu.eemrsserver.mapper.UserLongTermMemoryMapper">
+    <select id="findActiveByPatientIdHash" resultType="com.liu.eemrsserver.memory.domain.UserLongTermMemory">
+        select * from user_long_term_memory
+        where patient_id_hash = #{patientIdHash}
+          and active = 1
+        order by updated_at desc, id desc
+    </select>
+
+    <select id="findActiveByPatientIdHashAndType" resultType="com.liu.eemrsserver.memory.domain.UserLongTermMemory">
+        select * from user_long_term_memory
+        where patient_id_hash = #{patientIdHash}
+          and memory_type = #{memoryType}
+          and active = 1
+        order by updated_at desc, id desc
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into user_long_term_memory(
+            patient_id_hash,
+            memory_type,
+            memory_key,
+            memory_value,
+            severity,
+            relation,
+            evidence,
+            source,
+            confirmed,
+            active
+        ) values (
+            #{patientIdHash},
+            #{memoryType},
+            #{memoryKey},
+            #{memoryValue},
+            #{severity},
+            #{relation},
+            #{evidence},
+            #{source},
+            #{confirmed},
+            #{active}
+        )
+    </insert>
+
+    <update id="updateByIdAndPatientIdHash">
+        update user_long_term_memory
+        set memory_type = #{memoryType},
+            memory_key = #{memoryKey},
+            memory_value = #{memoryValue},
+            severity = #{severity},
+            relation = #{relation},
+            evidence = #{evidence},
+            source = #{source},
+            confirmed = #{confirmed},
+            active = #{active}
+        where id = #{id}
+          and patient_id_hash = #{patientIdHash}
+    </update>
+
+    <update id="softDeleteByIdAndPatientIdHash">
+        update user_long_term_memory
+        set active = 0
+        where id = #{id}
+          and patient_id_hash = #{patientIdHash}
+    </update>
+
+    <select id="existsSimilarMemory" resultType="int">
+        select count(1)
+        from user_long_term_memory
+        where patient_id_hash = #{patientIdHash}
+          and memory_type = #{memoryType}
+          and active = 1
+          <if test="memoryKey != null and memoryKey != ''">
+              and memory_key = #{memoryKey}
+          </if>
+          <if test="memoryKey == null or memoryKey == ''">
+              and memory_value = #{memoryValue}
+          </if>
+    </select>
+</mapper>

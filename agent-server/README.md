@@ -1,6 +1,6 @@
 # EEMRS Agent Server
 
-Java 17 Spring Boot service for patient pre-consultation and medical record draft generation.
+Java 17 Spring Boot service for patient pre-consultation, RAG-enhanced medical record draft generation, Trace Harness evaluation, and doctor review of AI medical record drafts.
 
 ## LLM Provider
 
@@ -79,10 +79,47 @@ http://localhost:8081/api/agent/health
 
 The response includes LLM routing status and whether DeepSeek is configured. It never returns the API key.
 
+## Medical Record Draft Review
+
+AI drafts are stored in `agent_medical_record_draft` with an AI original JSON, doctor-edited JSON, review status, trace metadata, and review timestamps. Doctor actions are written to `agent_medical_record_draft_audit`.
+
+Supported statuses:
+
+```text
+GENERATED -> REVIEWING -> ACCEPTED -> APPLIED
+GENERATED -> REVIEWING -> PARTIALLY_ACCEPTED -> APPLIED
+GENERATED -> REVIEWING -> REJECTED
+```
+
+Rejected drafts cannot be applied. Applying an already applied draft is idempotent.
+
+Doctor review endpoints require the same Bearer JWT issued by `eemrs-server-master`; the service uses the JWT doctor identity and does not trust `doctorId` from the frontend.
+
+See:
+
+```text
+../docs/DRAFT_REVIEW_API_AND_SCHEMA.md
+../docs/PRODUCT_METRICS.md
+../docs/BAD_CASES.md
+```
+
 ## Test Pre-Consultation
 
 ```text
 POST http://localhost:8081/api/agent/pre-consultation
+```
+
+## Test And Metrics
+
+```powershell
+cd agent-server
+mvn -q test
+```
+
+```powershell
+cd ..
+python evaluation\generate_product_metrics.py
+python evaluation\check_bad_case_regressions.py
 ```
 
 ## Switch Back To Ollama

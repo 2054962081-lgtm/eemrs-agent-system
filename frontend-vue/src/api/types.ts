@@ -83,8 +83,8 @@ export interface MedicalRecordRequest {
   doctorName: string
   doctorIdNumber: string
   gender?: string
-  dPk: string
-  signature: string
+  dPk?: string
+  signature?: string
 }
 
 export interface MedicalRecordQuery {
@@ -101,4 +101,11 @@ export interface MedicalRecordQuery {
 export interface VisitInfo extends MedicalRecordRequest {
   patientIdHashCode?: string
   doctorIdHashCode?: string
+}
+
+export interface MedicalRecordSignatureResponse {
+  dPk?: string
+  DPk?: string
+  dpk?: string
+  signature: string
 }

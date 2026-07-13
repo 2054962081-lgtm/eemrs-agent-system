@@ -1,0 +1,20 @@
+[
+  {"code":"WBC","name":"白细胞","aliases":["白细胞计数","白血球","WBC"]},
+  {"code":"NEUT_PERCENT","name":"中性粒细胞百分比","aliases":["中性粒细胞比例","中性粒细胞百分比","NEUT%","NEUT_PERCENT"]},
+  {"code":"LYMPH_PERCENT","name":"淋巴细胞百分比","aliases":["淋巴细胞比例","LYMPH%","LYMPH_PERCENT"]},
+  {"code":"HGB","name":"血红蛋白","aliases":["血红蛋白","血红素","HGB","Hb"]},
+  {"code":"PLT","name":"血小板","aliases":["血小板计数","血小板","PLT"]},
+  {"code":"CRP","name":"C反应蛋白","aliases":["C反应蛋白","CRP"]},
+  {"code":"ALT","name":"谷丙转氨酶","aliases":["谷丙转氨酶","丙氨酸氨基转移酶","ALT"]},
+  {"code":"AST","name":"谷草转氨酶","aliases":["谷草转氨酶","天门冬氨酸氨基转移酶","AST"]},
+  {"code":"TBIL","name":"总胆红素","aliases":["总胆红素","TBIL"]},
+  {"code":"CREA","name":"肌酐","aliases":["肌酐","血肌酐","CREA","Scr"]},
+  {"code":"UREA","name":"尿素","aliases":["尿素","尿素氮","UREA","BUN"]},
+  {"code":"UA","name":"尿酸","aliases":["尿酸","UA"]},
+  {"code":"GLU","name":"血糖","aliases":["血糖","葡萄糖","GLU"]},
+  {"code":"HBA1C","name":"糖化血红蛋白","aliases":["糖化血红蛋白","HbA1c","HBA1C"]},
+  {"code":"TC","name":"总胆固醇","aliases":["总胆固醇","TC"]},
+  {"code":"TG","name":"甘油三酯","aliases":["甘油三酯","TG"]},
+  {"code":"LDL_C","name":"低密度脂蛋白胆固醇","aliases":["低密度脂蛋白胆固醇","LDL-C","LDL_C"]},
+  {"code":"HDL_C","name":"高密度脂蛋白胆固醇","aliases":["高密度脂蛋白胆固醇","HDL-C","HDL_C"]}
+]

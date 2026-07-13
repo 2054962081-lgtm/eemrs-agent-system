@@ -21,6 +21,10 @@ public interface GuahaoMapper {
 
     List<Waiting> queryByDept(@Param("enDept")  String department,@Param("hash") String hash);
 
-    PatientInfo getPatientByHashCode(String hashCode);
+    Waiting queryWaitingByDeptDoctorAndPatient(@Param("enDept") String department,
+                                               @Param("doctorHash") String doctorHash,
+                                               @Param("patientHash") String patientHash);
+
+    List<PatientInfo> listPatientsByHashCode(String hashCode);
     boolean deleteGuaHaoByHash(String hash);
 }

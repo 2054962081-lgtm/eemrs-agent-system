@@ -12,6 +12,13 @@ import {
   type MedicalRecordDraftGenerateResponse,
   type PreConsultationResponse,
 } from '../../api/agent'
+import {
+  appendShortTermQuestionAnswer,
+  completeShortTermMemorySession,
+  createShortTermMemorySession,
+  getMemoryContext,
+  type MemoryContext,
+} from '../../api/memory'
 
 type ConsultationMode = 'quick' | 'deep'
 
@@ -29,6 +36,7 @@ const checking = ref(false)
 const draftLoading = ref(false)
 const healthText = ref('未检测')
 const errorText = ref('')
+const memoryText = ref('')
 const draftErrorText = ref('')
 const finished = ref(false)
 const round = ref(0)
@@ -81,6 +89,14 @@ async function checkHealth() {
   }
 }
 
+async function runMemoryTask(task: () => Promise<unknown>) {
+  try {
+    await task()
+  } catch {
+    memoryText.value = ''
+  }
+}
+
 function selectMode(mode: ConsultationMode) {
   selectedMode.value = mode
   resetConversation(false)
@@ -99,6 +115,7 @@ function resetConversation(keepMode = true) {
   messages.value = []
   model.value = ''
   errorText.value = ''
+  memoryText.value = ''
   finished.value = false
   round.value = 0
   resetDraftState()
@@ -134,12 +151,18 @@ async function submit(customQuestion?: string) {
   scrollToBottom()
 
   try {
+    await runMemoryTask(() => createShortTermMemorySession(sessionId.value))
+    let memoryContext: MemoryContext | undefined
+    await runMemoryTask(async () => {
+      memoryContext = await getMemoryContext(sessionId.value, value)
+    })
     const result: PreConsultationResponse = await sendPreConsultationMessage({
       mode: selectedMode.value,
       sessionId: sessionId.value,
       question: value,
       round: nextRound,
       history,
+      memoryContext,
     })
 
     model.value = result.model
@@ -156,6 +179,22 @@ async function submit(customQuestion?: string) {
     })
     if (isSummaryRequest && result.success) {
       consultationConclusion.value = assistantReply
+    }
+    await runMemoryTask(async () => {
+      await appendShortTermQuestionAnswer(sessionId.value, {
+        question: value,
+        answer: assistantReply,
+        round: round.value,
+        temporaryConclusion: isSummaryRequest ? assistantReply : undefined,
+      })
+      memoryText.value = '已参考近期记忆'
+    })
+    if (finished.value) {
+      await runMemoryTask(() => completeShortTermMemorySession(sessionId.value, {
+        summary: isSummaryRequest ? assistantReply : undefined,
+        department: result.recommendedDepartment,
+        sourceId: sessionId.value,
+      }))
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
@@ -264,6 +303,7 @@ onMounted(() => {
             <small v-if="model">{{ model }}</small>
           </div>
           <p>{{ statusText }}</p>
+          <p v-if="memoryText">{{ memoryText }}</p>
         </div>
         <div class="header-actions">
           <el-button @click="resetConversation()">重新开始</el-button>

@@ -18,13 +18,24 @@
             </if>
         </trim>
     </select>
+    <select id="queryWaitingByDeptDoctorAndPatient" resultType="com.liu.eemrsserver.domain.Waiting">
+        select id_number,user_name
+        from tb_guahao
+        where department=#{enDept}
+          and doctor_id_hash_code=#{doctorHash}
+          and id_hash_code=#{patientHash}
+        limit 1
+    </select>
     <delete id="deleteGuaHaoByHash">
         delete from tb_guahao
         where id_hash_code=#{hash}
     </delete>
 
 
-    <select id="getPatientByHashCode" resultType="com.liu.eemrsserver.domain.PatientInfo">
-        select * from tb_patient where id_hash_code=#{hashCode}
+    <select id="listPatientsByHashCode" resultType="com.liu.eemrsserver.domain.PatientInfo">
+        select *
+        from tb_patient
+        where id_hash_code=#{hashCode}
+        order by id desc
     </select>
 </mapper>

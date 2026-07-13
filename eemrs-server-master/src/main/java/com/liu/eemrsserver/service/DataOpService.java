@@ -22,7 +22,6 @@ public class DataOpService {
     public List<VisitInfo> query(QueryConditions queryConditions) {
         return dataOpCrypto.query(queryConditions);
     }
-
     public DoctorInfo sendDocInfo(String id) {
         return dataOpCrypto.getDocInfo(id);
     }

@@ -1,0 +1,19 @@
+{
+  "summary": {
+    "total_cases": 2,
+    "passed_cases": 1,
+    "failed_cases": 1
+  },
+  "failure_stage_distribution": {
+    "NOT_OBSERVABLE_IN_CURRENT_ARCHITECTURE": 1
+  },
+  "bad_cases": [
+    {
+      "case_id": "PC-TOOL-002",
+      "run_id": "eval-PC-TOOL-002-sample",
+      "failure_stage": "NOT_OBSERVABLE_IN_CURRENT_ARCHITECTURE",
+      "failure_reason": "Registration refusal is not observable in the current backend trace architecture.",
+      "suggested_fix": "Keep the expected field and add a backend event only when the product flow exposes it."
+    }
+  ]
+}

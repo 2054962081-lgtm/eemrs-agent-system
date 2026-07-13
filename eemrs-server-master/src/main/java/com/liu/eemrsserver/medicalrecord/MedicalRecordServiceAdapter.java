@@ -1,12 +1,12 @@
 package com.liu.eemrsserver.medicalrecord;
 
 import com.liu.eemrsserver.common.RequestValidator;
-import com.liu.eemrsserver.common.BadRequestException;
 import com.liu.eemrsserver.domain.PatientInfo;
 import com.liu.eemrsserver.domain.VisitInfo;
 import com.liu.eemrsserver.jsontrans.QueryConditions;
 import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordQueryRequest;
 import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordRequest;
+import com.liu.eemrsserver.medicalrecord.dto.MedicalRecordSignatureResponse;
 import com.liu.eemrsserver.security.ForbiddenException;
 import com.liu.eemrsserver.security.Role;
 import com.liu.eemrsserver.security.UserPrincipal;
@@ -25,6 +25,8 @@ public class MedicalRecordServiceAdapter {
     private DataOpService dataOpService;
     @Autowired
     private GuahaoService guahaoService;
+    @Autowired
+    private MedicalRecordSignatureService medicalRecordSignatureService;
 
     public boolean create(MedicalRecordRequest request, UserPrincipal currentUser) {
         RequestValidator.notNull(request, "request");
@@ -35,8 +37,6 @@ public class MedicalRecordServiceAdapter {
         RequestValidator.notBlank(request.getDepartment(), "department");
         RequestValidator.notBlank(request.getConditionDescription(), "conditionDescription");
         RequestValidator.notBlank(request.getPatientIdNumber(), "patientIdNumber");
-        RequestValidator.notBlank(request.getDPk(), "dPk");
-        RequestValidator.notBlank(request.getSignature(), "signature");
         if (request.getDoctorIdNumber() != null && !currentUser.getIdNumber().equals(request.getDoctorIdNumber())) {
             throw new ForbiddenException("Cannot create medical record as another doctor");
         }
@@ -46,6 +46,7 @@ public class MedicalRecordServiceAdapter {
         }
         request.setDoctorIdNumber(currentUser.getIdNumber());
         ensureVisitTime(request);
+        ensureSignature(request, currentUser);
 
         VisitInfo visitInfo = toVisitInfo(request);
         boolean inserted = dataOpService.insertInto(visitInfo);
@@ -53,6 +54,14 @@ public class MedicalRecordServiceAdapter {
             guahaoService.delectGuaHao(request.getPatientIdNumber());
         }
         return inserted;
+    }
+
+    private void ensureSignature(MedicalRecordRequest request, UserPrincipal currentUser) {
+        if (isBlank(request.getDPk()) || isBlank(request.getSignature())) {
+            MedicalRecordSignatureResponse signature = medicalRecordSignatureService.sign(request, currentUser);
+            request.setDPk(signature.getDPk());
+            request.setSignature(signature.getSignature());
+        }
     }
 
     public List<VisitInfo> query(MedicalRecordQueryRequest request, UserPrincipal currentUser) {
@@ -125,5 +134,9 @@ public class MedicalRecordServiceAdapter {
 
     private String blankToNull(String value) {
         return value == null || value.trim().isEmpty() ? null : value;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

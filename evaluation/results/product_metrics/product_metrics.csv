@@ -1,0 +1,37 @@
+area,name,value,source,sample_count,method,note
+pre_consultation,评测样本数量,50,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,JSON list length,
+pre_consultation,成功完成率,1.0,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,finalResponse.data.success == true,
+pre_consultation,平均问诊轮次,1.0,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,average finalResponse.data.round,
+pre_consultation,平均响应时间,Not available / 尚无足够真实数据,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,historical JSON does not include per-case latency,
+pre_consultation,Must-Ask 平均覆盖率,0.3645,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,mean(mustAskHitCount / mustAskTotal),
+pre_consultation,关键病史遗漏率,0.6355,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,mean(1 - mustAsk coverage),
+pre_consultation,red flag 召回率,Not available / 尚无足够真实数据,evaluation/reports/eval_report_extended_refined_20260603_223235.json,0,red_flag case with urgent/emergency final urgency and no hard fail,
+pre_consultation,科室推荐命中率,1.0,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,departmentHits non-empty,
+pre_consultation,输出格式成功率,Not available / 尚无足够真实数据,evaluation/reports/eval_report_extended_refined_20260603_223235.json,0,jsonValid == true; N/A when case is not record JSON task,
+pre_consultation,模型调用失败率,0.0,evaluation/reports/eval_report_extended_refined_20260603_223235.json,50,finalResponse.data.success == false or error present,
+rag,RAG 对照样本数量,90,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,parsed latest RAG A/B markdown,
+rag,RAG 检索成功率,1.0,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,RAG service reachable and Milvus collection exists in report,
+rag,有效知识召回率,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,no human-labeled relevant chunk set in current output,
+rag,空召回率,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,latest markdown does not expose per-case empty retrieval counts,
+rag,无关片段率,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,no human-labeled irrelevant chunk set in current output,
+rag,RAG 开启总分,8.7411,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,reported average score with RAG,
+rag,RAG 关闭总分,7.8511,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,reported average score without RAG,
+rag,RAG 开启/关闭总分变化,0.89,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,with_rag_score - no_rag_score,
+rag,RAG 开启与关闭 Must-Ask 覆盖率变化,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,"RAG A/B report stores total score, not must-ask deltas",
+rag,RAG 开启与关闭安全指标变化,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,"RAG A/B report stores total score, not safety deltas",
+rag,平均检索耗时,Not available / 尚无足够真实数据,evaluation/reports/medical_rag_ab_test_report_20260606_102121.md,90,historical report does not expose retrieval latency,
+report_trend,指标提取成功率,1.0,docs/eval/report_trend_eval_results.csv,12,mean(abnormal_detection_correct),mock runner / 测试环境数据
+report_trend,同名指标对齐成功率,Not available / 尚无足够真实数据,docs/eval/report_trend_eval_results.csv,12,not separately emitted by current harness,mock runner / 测试环境数据
+report_trend,趋势判断成功率,1.0,docs/eval/report_trend_eval_results.csv,12,mean(trend_direction_correct),mock runner / 测试环境数据
+report_trend,脱敏成功率,1.0,docs/eval/report_trend_eval_results.csv,12,mean(privacy_pass),mock runner / 测试环境数据
+report_trend,分析接口成功率,1.0,docs/eval/report_trend_eval_results.csv,12,status == PASSED,mock runner / 测试环境数据
+report_trend,平均处理时延,200.0,docs/eval/report_trend_eval_results.csv,12,average latency_ms,mock runner / 测试环境数据
+draft_review,完全采纳率,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,部分采纳率,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,拒绝率,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,写入正式病历成功率,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,平均审核时长,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,平均修改字段数,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,字段修改率,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,常见拒绝原因,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,
+draft_review,最常被修改的字段,Not available / 尚无足够真实数据,agent_medical_record_draft_audit table / no production export found,0,requires real audit rows after doctors review drafts,

@@ -6,8 +6,8 @@
     <insert id="insertUserWithType">
         insert into
         <include refid="choose"/>
-        (id_number,password,id_hash_code,user_name<if test="type=='dt'">,department</if><if test="type=='pt'">,counter </if>)
-        values(#{idNumber},#{password},#{hashCode},#{userName}<if test="type=='dt'">,#{department}</if><if test="type=='pt'">,#{counter}</if>)
+        (id_number,password,id_hash_code,user_name<if test="type=='dt' or type=='dr'">,department</if><if test="type=='pt'">,counter </if>)
+        values(#{idNumber},#{password},#{hashCode},#{userName}<if test="type=='dt' or type=='dr'">,#{department}</if><if test="type=='pt'">,#{counter}</if>)
     </insert>
 
     <select id="getDocByHash" resultType="com.liu.eemrsserver.domain.DocLog">
@@ -15,10 +15,34 @@
         tb_doctor
         where id_hash_code=#{hashCode}
     </select>
+
+    <select id="getDocsWithoutHash" resultType="com.liu.eemrsserver.domain.DocLog">
+        select * from tb_doctor where id_hash_code is null or id_hash_code=''
+    </select>
+
+    <select id="listAllDocsForLoginRepair" resultType="com.liu.eemrsserver.domain.DocLog">
+        select * from tb_doctor
+    </select>
+
+    <update id="updateDocHashById">
+        update tb_doctor set id_hash_code=#{hashCode} where id=#{id}
+    </update>
     
     <select id="getPatByHash" resultType="com.liu.eemrsserver.domain.PatLog">
         select * from tb_patient where id_hash_code=#{hashCode}
     </select>
+
+    <select id="getPatsWithoutHash" resultType="com.liu.eemrsserver.domain.PatLog">
+        select * from tb_patient where id_hash_code is null or id_hash_code=''
+    </select>
+
+    <select id="listAllPatsForLoginRepair" resultType="com.liu.eemrsserver.domain.PatLog">
+        select * from tb_patient
+    </select>
+
+    <update id="updatePatHashById">
+        update tb_patient set id_hash_code=#{hashCode} where id=#{id}
+    </update>
 
     <delete id="deleteUserByHash">
         delete from
@@ -31,7 +55,7 @@
         <if test="type=='pt'">
             tb_patient
         </if>
-        <if test="type=='dt'">
+        <if test="type=='dt' or type=='dr'">
             tb_doctor
         </if>
 

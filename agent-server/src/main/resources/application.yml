@@ -10,6 +10,22 @@ spring:
     password: ${AGENT_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+agent:
+  trace:
+    enabled: ${AGENT_TRACE_ENABLED:true}
+    persistence-enabled: ${AGENT_TRACE_PERSISTENCE_ENABLED:true}
+    payload-enabled: ${AGENT_TRACE_PAYLOAD_ENABLED:false}
+    payload-max-length: ${AGENT_TRACE_PAYLOAD_MAX_LENGTH:4000}
+    summary-max-length: ${AGENT_TRACE_SUMMARY_MAX_LENGTH:1000}
+    async-enabled: ${AGENT_TRACE_ASYNC_ENABLED:true}
+    retention-days: ${AGENT_TRACE_RETENTION_DAYS:30}
+    user-hash-salt: ${AGENT_TRACE_HASH_SALT:}
+    cost:
+      enabled: ${AGENT_TRACE_COST_ENABLED:false}
+      currency: ${AGENT_TRACE_COST_CURRENCY:CNY}
+      config-version: ${AGENT_TRACE_COST_CONFIG_VERSION:v1}
+      models: {}
+
 llm:
   default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}
 
@@ -37,3 +53,31 @@ llm:
   fallback:
     enabled: ${LLM_FALLBACK_ENABLED:false}
     fallback-provider: ${LLM_FALLBACK_PROVIDER:ollama}
+
+rag:
+  enabled: ${RAG_ENABLED:true}
+  service-url: ${RAG_SERVICE_URL:http://localhost:18080}
+  retrieve-path: ${RAG_RETRIEVE_PATH:/rag/retrieve}
+  timeout-ms: ${RAG_TIMEOUT_MS:3000}
+  top-k: ${RAG_TOP_K:8}
+  max-context-chars: ${RAG_MAX_CONTEXT_CHARS:3000}
+  include-doc-types:
+    - red_flag
+    - symptom_inquiry
+    - special_population
+    - department_triage
+    - medical_record_template
+  fail-open: ${RAG_FAIL_OPEN:true}
+  debug-log: ${RAG_DEBUG_LOG:true}
+  question-plan:
+    enabled: ${RAG_QUESTION_PLAN_ENABLED:true}
+    max-key-questions-quick: ${RAG_MAX_KEY_QUESTIONS_QUICK:5}
+    max-key-questions-deep: ${RAG_MAX_KEY_QUESTIONS_DEEP:8}
+    must-ask-target-coverage: ${RAG_MUST_ASK_TARGET_COVERAGE:0.6}
+  post-process:
+    enabled: ${RAG_POST_PROCESS_ENABLED:true}
+    max-added-questions: ${RAG_POST_PROCESS_MAX_ADDED_QUESTIONS:3}
+  query-expansion:
+    enabled: ${RAG_QUERY_EXPANSION_ENABLED:true}
+  retrieval:
+    ensure-doc-type-balance: ${RAG_ENSURE_DOC_TYPE_BALANCE:true}

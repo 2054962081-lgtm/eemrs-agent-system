@@ -11,6 +11,9 @@
         <mapper resource="mybatis/mapper/UserLogMapper.xml"></mapper>
         <mapper resource="mybatis/mapper/GuahaoMapper.xml"/>
         <mapper resource="mybatis/mapper/DataOpMappper.xml"/>
+        <mapper resource="mybatis/mapper/LabReportMapper.xml"/>
+        <mapper resource="mybatis/mapper/UserHealthProfileMapper.xml"/>
+        <mapper resource="mybatis/mapper/UserLongTermMemoryMapper.xml"/>
         <mapper resource="mybatis/mapper/PIMMapper"/>
     </mappers>
 </configuration>

@@ -1,0 +1,334 @@
+{
+  "metadata": {
+    "generated_at": "2026-07-13T21:36:43",
+    "git_commit": "440bdb0",
+    "model": "deepseek-v4-flash where captured in eval output; mock-model for docs/eval mock harness",
+    "rag": "RAG comparison uses medical_rag_ab_test_report_20260606_102121.md; pre-consultation batch output includes live response payloads but not a uniform RAG flag per case."
+  },
+  "metrics": [
+    {
+      "area": "pre_consultation",
+      "name": "评测样本数量",
+      "value": 50,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "JSON list length",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "成功完成率",
+      "value": 1.0,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "finalResponse.data.success == true",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "平均问诊轮次",
+      "value": 1.0,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "average finalResponse.data.round",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "平均响应时间",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "historical JSON does not include per-case latency",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "Must-Ask 平均覆盖率",
+      "value": 0.3645,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "mean(mustAskHitCount / mustAskTotal)",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "关键病史遗漏率",
+      "value": 0.6355,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "mean(1 - mustAsk coverage)",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "red flag 召回率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 0,
+      "method": "red_flag case with urgent/emergency final urgency and no hard fail",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "科室推荐命中率",
+      "value": 1.0,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "departmentHits non-empty",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "输出格式成功率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 0,
+      "method": "jsonValid == true; N/A when case is not record JSON task",
+      "note": ""
+    },
+    {
+      "area": "pre_consultation",
+      "name": "模型调用失败率",
+      "value": 0.0,
+      "source": "evaluation/reports/eval_report_extended_refined_20260603_223235.json",
+      "sample_count": 50,
+      "method": "finalResponse.data.success == false or error present",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 对照样本数量",
+      "value": 90,
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "parsed latest RAG A/B markdown",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 检索成功率",
+      "value": 1.0,
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "RAG service reachable and Milvus collection exists in report",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "有效知识召回率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "no human-labeled relevant chunk set in current output",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "空召回率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "latest markdown does not expose per-case empty retrieval counts",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "无关片段率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "no human-labeled irrelevant chunk set in current output",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 开启总分",
+      "value": 8.7411,
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "reported average score with RAG",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 关闭总分",
+      "value": 7.8511,
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "reported average score without RAG",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 开启/关闭总分变化",
+      "value": 0.89,
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "with_rag_score - no_rag_score",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 开启与关闭 Must-Ask 覆盖率变化",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "RAG A/B report stores total score, not must-ask deltas",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "RAG 开启与关闭安全指标变化",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "RAG A/B report stores total score, not safety deltas",
+      "note": ""
+    },
+    {
+      "area": "rag",
+      "name": "平均检索耗时",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "evaluation/reports/medical_rag_ab_test_report_20260606_102121.md",
+      "sample_count": 90,
+      "method": "historical report does not expose retrieval latency",
+      "note": ""
+    },
+    {
+      "area": "report_trend",
+      "name": "指标提取成功率",
+      "value": 1.0,
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "mean(abnormal_detection_correct)",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "report_trend",
+      "name": "同名指标对齐成功率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "not separately emitted by current harness",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "report_trend",
+      "name": "趋势判断成功率",
+      "value": 1.0,
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "mean(trend_direction_correct)",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "report_trend",
+      "name": "脱敏成功率",
+      "value": 1.0,
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "mean(privacy_pass)",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "report_trend",
+      "name": "分析接口成功率",
+      "value": 1.0,
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "status == PASSED",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "report_trend",
+      "name": "平均处理时延",
+      "value": 200.0,
+      "source": "docs/eval/report_trend_eval_results.csv",
+      "sample_count": 12,
+      "method": "average latency_ms",
+      "note": "mock runner / 测试环境数据"
+    },
+    {
+      "area": "draft_review",
+      "name": "完全采纳率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "部分采纳率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "拒绝率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "写入正式病历成功率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "平均审核时长",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "平均修改字段数",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "字段修改率",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "常见拒绝原因",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    },
+    {
+      "area": "draft_review",
+      "name": "最常被修改的字段",
+      "value": "Not available / 尚无足够真实数据",
+      "source": "agent_medical_record_draft_audit table / no production export found",
+      "sample_count": 0,
+      "method": "requires real audit rows after doctors review drafts",
+      "note": ""
+    }
+  ]
+}

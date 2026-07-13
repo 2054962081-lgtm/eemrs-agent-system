@@ -2,7 +2,7 @@ import request from './request'
 import type { DoctorInfo, WaitingPatient } from './types'
 
 export function getDoctorsByDepartment(department: string) {
-  return request.get<never, DoctorInfo[]>('/doctors', { params: { department } })
+  return request.get<never, DoctorInfo[]>('/doctors', { params: { department: department.trim() } })
 }
 
 export function getDoctorMe() {

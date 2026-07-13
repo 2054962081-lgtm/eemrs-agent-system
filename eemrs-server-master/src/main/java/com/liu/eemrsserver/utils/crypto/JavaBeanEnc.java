@@ -179,7 +179,7 @@ public class JavaBeanEnc {
 
     public static DoctorInfo encDocInfoInfo(DoctorInfo d, byte[] sm4Key) {
         DoctorInfo doctorInfo = new DoctorInfo();
-        doctorInfo.setDepartment(SM4_String.encWithIV(d.getDepartment(), sm4Key));
+        doctorInfo.setDepartment(SM4_String.encWithoutIV(d.getDepartment(), sm4Key));
         doctorInfo.setGender(d.getGender() == null ? null : SM4_String.encWithIV(d.getGender(), sm4Key));
         doctorInfo.setIdHashCode(SM3.hash(d.getIdNumber()));
         doctorInfo.setIdNumber(SM4_String.encWithIV(d.getIdNumber(), sm4Key));

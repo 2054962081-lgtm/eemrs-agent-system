@@ -1,13 +1,15 @@
 package com.liu.eemrsagent.agent;
 
 import java.util.List;
+import java.util.Map;
 
 public record PreConsultationRequest(
         String mode,
         String sessionId,
         String question,
         Integer round,
-        List<Message> history
+        List<Message> history,
+        MemoryContext memoryContext
 ) {
     public String normalizedMode() {
         if (mode == null || mode.trim().isEmpty()) {
@@ -39,5 +41,13 @@ public record PreConsultationRequest(
     }
 
     public record Message(String role, String content) {
+    }
+
+    public record MemoryContext(
+            Map<String, Object> longTermMemory,
+            List<Map<String, Object>> mediumTermMemory,
+            Map<String, Object> shortTermMemory,
+            List<Map<String, Object>> relatedUserMemory
+    ) {
     }
 }

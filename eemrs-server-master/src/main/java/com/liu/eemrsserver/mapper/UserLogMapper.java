@@ -21,7 +21,19 @@ public interface UserLogMapper {
 
     List<DocLog> getDocByHash(@Param("hashCode") String hashCode);
 
+    List<DocLog> getDocsWithoutHash();
+
+    List<DocLog> listAllDocsForLoginRepair();
+
+    boolean updateDocHashById(@Param("id") Integer id, @Param("hashCode") String hashCode);
+
     boolean deleteUserByHash(@Param("hashCode") String hashCode, @Param("type") String type);
 
     List<PatLog> getPatByHash(@Param("hashCode")String hashCode);
+
+    List<PatLog> getPatsWithoutHash();
+
+    List<PatLog> listAllPatsForLoginRepair();
+
+    boolean updatePatHashById(@Param("id") Integer id, @Param("hashCode") String hashCode);
 }

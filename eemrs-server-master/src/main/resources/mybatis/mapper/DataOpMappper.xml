@@ -4,12 +4,14 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.liu.eemrsserver.mapper.DataOpMappper">
     <select id="getDocNameByDepartment" resultType="com.liu.eemrsserver.domain.DoctorInfo">
-        select * from tb_doctor where department=#{department}
+        select * from tb_doctor
+        where department=#{department}
+           or department=#{plainDepartment}
     </select>
     <select id="getDocInfoByHashCode" resultType="com.liu.eemrsserver.domain.DoctorInfo">
         select * from tb_doctor where id_hash_code=#{hash}
     </select>
-    <select id="getCounterByIdHash" resultType="string">
+    <select id="getCountersByIdHash" resultType="string">
         select counter from tb_patient where id_hash_code=#{hash}
     </select>
 

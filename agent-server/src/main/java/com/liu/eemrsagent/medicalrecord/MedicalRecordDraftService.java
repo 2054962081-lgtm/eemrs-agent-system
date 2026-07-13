@@ -9,11 +9,21 @@ import com.liu.eemrsagent.llm.LlmChatResponse;
 import com.liu.eemrsagent.llm.LlmClientFactory;
 import com.liu.eemrsagent.llm.LlmException;
 import com.liu.eemrsagent.llm.LlmMessage;
+import com.liu.eemrsagent.rag.RagContextFormatter;
+import com.liu.eemrsagent.rag.RagPromptBuilder;
+import com.liu.eemrsagent.rag.RagProperties;
+import com.liu.eemrsagent.rag.RagRetrievalClient;
+import com.liu.eemrsagent.security.AgentUserPrincipal;
+import com.liu.eemrsagent.security.ForbiddenException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,15 +36,30 @@ public class MedicalRecordDraftService {
     private final LlmClientFactory llmClientFactory;
     private final ObjectMapper objectMapper;
     private final MedicalRecordDraftRepository repository;
+    private final RagRetrievalClient ragRetrievalClient;
+    private final RagContextFormatter ragContextFormatter;
+    private final RagPromptBuilder ragPromptBuilder;
+    private final RagProperties ragProperties;
+    private final CoreMedicalRecordClient coreMedicalRecordClient;
 
     public MedicalRecordDraftService(
             LlmClientFactory llmClientFactory,
             ObjectMapper objectMapper,
-            MedicalRecordDraftRepository repository
+            MedicalRecordDraftRepository repository,
+            RagRetrievalClient ragRetrievalClient,
+            RagContextFormatter ragContextFormatter,
+            RagPromptBuilder ragPromptBuilder,
+            RagProperties ragProperties,
+            CoreMedicalRecordClient coreMedicalRecordClient
     ) {
         this.llmClientFactory = llmClientFactory;
         this.objectMapper = objectMapper;
         this.repository = repository;
+        this.ragRetrievalClient = ragRetrievalClient;
+        this.ragContextFormatter = ragContextFormatter;
+        this.ragPromptBuilder = ragPromptBuilder;
+        this.ragProperties = ragProperties;
+        this.coreMedicalRecordClient = coreMedicalRecordClient;
     }
 
     public MedicalRecordDraftGenerateResponse generate(MedicalRecordDraftGenerateRequest request) {
@@ -72,6 +97,24 @@ public class MedicalRecordDraftService {
         }
     }
 
+    @Transactional
+    public MedicalRecordDraftQueryResponse findLatestByPatientIdForDoctor(String patientId, AgentUserPrincipal currentUser, String traceId) {
+        requireDoctor(currentUser);
+        MedicalRecordDraftQueryResponse response = findLatestByPatientId(patientId);
+        if (!response.success() || !response.hasDraft() || response.draft() == null) {
+            return response;
+        }
+        MedicalRecordDraftRepository.MedicalRecordDraftRow row = requireDraft(response.draft().id());
+        ensureDoctorCanAccess(row, currentUser);
+        if (MedicalRecordDraftStatus.parse(row.status()) == MedicalRecordDraftStatus.GENERATED) {
+            repository.lockForDoctorIfUnassigned(row.id(), currentUser.idNumber());
+            insertAudit(row.id(), currentUser.idNumber(), MedicalRecordDraftAction.OPEN,
+                    row.editedRecordJson(), row.editedRecordJson(), null, "doctor opened latest draft", traceId);
+            row = requireDraft(row.id());
+        }
+        return MedicalRecordDraftQueryResponse.found(toDetail(row));
+    }
+
     public MedicalRecordDraftQueryResponse findById(String draftId) {
         Long parsedDraftId = parsePositiveLong(draftId, "draftId");
         try {
@@ -81,6 +124,147 @@ public class MedicalRecordDraftService {
         } catch (DataAccessException e) {
             return MedicalRecordDraftQueryResponse.fail("预问诊病历草稿查询失败，请稍后重试。", e.getMessage());
         }
+    }
+
+    @Transactional
+    public MedicalRecordDraftQueryResponse findByIdForDoctor(String draftId, AgentUserPrincipal currentUser, String traceId) {
+        requireDoctor(currentUser);
+        Long parsedDraftId = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow row = repository.findById(parsedDraftId)
+                .orElseThrow(() -> new IllegalArgumentException("draft not found"));
+        ensureDoctorCanAccess(row, currentUser);
+        MedicalRecordDraftStatus status = MedicalRecordDraftStatus.parse(row.status());
+        if (status == MedicalRecordDraftStatus.GENERATED) {
+            repository.lockForDoctorIfUnassigned(row.id(), currentUser.idNumber());
+            insertAudit(row.id(), currentUser.idNumber(), MedicalRecordDraftAction.OPEN,
+                    row.editedRecordJson(), row.editedRecordJson(), null, "doctor opened draft", traceId);
+            row = repository.findById(parsedDraftId).orElse(row);
+        }
+        return MedicalRecordDraftQueryResponse.found(toDetail(row));
+    }
+
+    @Transactional
+    public MedicalRecordDraftActionResponse saveEdit(String draftId, MedicalRecordDraftEditRequest request,
+                                                     AgentUserPrincipal currentUser, String traceId) throws JsonProcessingException {
+        requireDoctor(currentUser);
+        Long id = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow before = requireDraft(id);
+        ensureDoctorCanAccess(before, currentUser);
+        MedicalRecordDraftStatus status = MedicalRecordDraftStatus.parse(before.status());
+        if (!status.canEdit()) {
+            throw new IllegalArgumentException("Draft in status " + status + " cannot be edited");
+        }
+        JsonNode edited = request == null ? null : request.editedRecordJson();
+        if (edited == null || edited.isNull()) {
+            throw new IllegalArgumentException("editedRecordJson is required");
+        }
+        String afterJson = objectMapper.writeValueAsString(edited);
+        int updated = repository.saveEdit(id, currentUser.idNumber(), afterJson, traceId);
+        if (updated == 0) {
+            throw new ForbiddenException("No permission to edit this draft or status changed");
+        }
+        insertAudit(id, currentUser.idNumber(), MedicalRecordDraftAction.SAVE_EDIT,
+                before.editedRecordJson(), afterJson, null, trim(request.comment()), traceId);
+        return MedicalRecordDraftActionResponse.ok("draft saved", toDetail(requireDraft(id)));
+    }
+
+    @Transactional
+    public MedicalRecordDraftActionResponse accept(String draftId, MedicalRecordDraftReviewRequest request,
+                                                   AgentUserPrincipal currentUser, String traceId) throws JsonProcessingException {
+        return review(draftId, request, currentUser, traceId, MedicalRecordDraftStatus.ACCEPTED, MedicalRecordDraftAction.ACCEPT);
+    }
+
+    @Transactional
+    public MedicalRecordDraftActionResponse partialAccept(String draftId, MedicalRecordDraftReviewRequest request,
+                                                          AgentUserPrincipal currentUser, String traceId) throws JsonProcessingException {
+        return review(draftId, request, currentUser, traceId, MedicalRecordDraftStatus.PARTIALLY_ACCEPTED, MedicalRecordDraftAction.PARTIAL_ACCEPT);
+    }
+
+    @Transactional
+    public MedicalRecordDraftActionResponse reject(String draftId, MedicalRecordDraftReviewRequest request,
+                                                   AgentUserPrincipal currentUser, String traceId) throws JsonProcessingException {
+        if (request == null || request.rejectReason() == null || request.rejectReason().isBlank()) {
+            throw new IllegalArgumentException("rejectReason is required");
+        }
+        return review(draftId, request, currentUser, traceId, MedicalRecordDraftStatus.REJECTED, MedicalRecordDraftAction.REJECT);
+    }
+
+    @Transactional
+    public MedicalRecordDraftActionResponse apply(String draftId, MedicalRecordDraftApplyRequest request,
+                                                  AgentUserPrincipal currentUser, String authorizationHeader,
+                                                  String traceId) throws JsonProcessingException {
+        requireDoctor(currentUser);
+        Long id = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow before = requireDraft(id);
+        ensureDoctorCanAccess(before, currentUser);
+        MedicalRecordDraftStatus status = MedicalRecordDraftStatus.parse(before.status());
+        if (status == MedicalRecordDraftStatus.APPLIED) {
+            return MedicalRecordDraftActionResponse.idempotent("draft already applied", toDetail(before));
+        }
+        if (!status.canApply()) {
+            throw new IllegalArgumentException("Only ACCEPTED or PARTIALLY_ACCEPTED drafts can be applied");
+        }
+        JsonNode appliedRecord = parseRecordJson(firstNonBlank(before.editedRecordJson(), before.aiRecordJson(), before.recordJson())).recordJson();
+        coreMedicalRecordClient.createFromDraft(before, request == null ? emptyApplyRequest() : request, appliedRecord, authorizationHeader);
+        String hash = sha256(objectMapper.writeValueAsString(appliedRecord));
+        int updated = repository.markApplied(id, currentUser.idNumber(), hash, traceId);
+        if (updated == 0) {
+            MedicalRecordDraftRepository.MedicalRecordDraftRow latest = requireDraft(id);
+            if (MedicalRecordDraftStatus.parse(latest.status()) == MedicalRecordDraftStatus.APPLIED) {
+                return MedicalRecordDraftActionResponse.idempotent("draft already applied", toDetail(latest));
+            }
+            throw new IllegalArgumentException("Draft status changed before apply");
+        }
+        insertAudit(id, currentUser.idNumber(), MedicalRecordDraftAction.APPLY,
+                before.editedRecordJson(), before.editedRecordJson(), null, "applied to formal medical record", traceId);
+        return MedicalRecordDraftActionResponse.ok("draft applied", toDetail(requireDraft(id)));
+    }
+
+    public MedicalRecordDraftHistoryResponse history(String draftId, AgentUserPrincipal currentUser) {
+        requireDoctor(currentUser);
+        Long id = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow row = requireDraft(id);
+        ensureDoctorCanAccess(row, currentUser);
+        return new MedicalRecordDraftHistoryResponse(id, repository.findAuditLogs(id));
+    }
+
+    public MedicalRecordDraftStatusResponse status(String draftId, AgentUserPrincipal currentUser) {
+        requireDoctor(currentUser);
+        Long id = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow row = requireDraft(id);
+        ensureDoctorCanAccess(row, currentUser);
+        return new MedicalRecordDraftStatusResponse(row.id(), MedicalRecordDraftStatus.parse(row.status()).name(),
+                row.firstReviewedAt(), row.completedAt(), row.appliedAt());
+    }
+
+    private MedicalRecordDraftActionResponse review(String draftId, MedicalRecordDraftReviewRequest request,
+                                                    AgentUserPrincipal currentUser, String traceId,
+                                                    MedicalRecordDraftStatus target,
+                                                    MedicalRecordDraftAction action) throws JsonProcessingException {
+        requireDoctor(currentUser);
+        Long id = parsePositiveLong(draftId, "draftId");
+        MedicalRecordDraftRepository.MedicalRecordDraftRow before = requireDraft(id);
+        ensureDoctorCanAccess(before, currentUser);
+        MedicalRecordDraftStatus current = MedicalRecordDraftStatus.parse(before.status());
+        if (!current.canTransitionTo(target)) {
+            if (current == target) {
+                return MedicalRecordDraftActionResponse.idempotent("draft already " + target.name(), toDetail(before));
+            }
+            throw new IllegalArgumentException("Illegal draft status transition: " + current + " -> " + target);
+        }
+        JsonNode edited = request == null ? null : request.editedRecordJson();
+        String afterJson = edited == null || edited.isNull()
+                ? firstNonBlank(before.editedRecordJson(), before.aiRecordJson(), before.recordJson())
+                : objectMapper.writeValueAsString(edited);
+        int updated = repository.transition(id, currentUser.idNumber(), current, target, afterJson, traceId);
+        if (updated == 0) {
+            throw new ForbiddenException("No permission to review this draft or status changed");
+        }
+        insertAudit(id, currentUser.idNumber(), action, before.editedRecordJson(), afterJson,
+                trim(request == null ? null : request.rejectReason()),
+                trim(request == null ? null : request.comment()),
+                traceId);
+        return MedicalRecordDraftActionResponse.ok("draft " + target.name().toLowerCase(), toDetail(requireDraft(id)));
     }
 
     private Long parsePositiveLong(String value, String fieldName) {
@@ -104,6 +288,8 @@ public class MedicalRecordDraftService {
                 row.id(),
                 row.patientId(),
                 row.patientIdNumber(),
+                row.doctorIdNumber(),
+                row.appointmentId(),
                 row.sessionId(),
                 row.consultationMode(),
                 row.sourceType(),
@@ -112,10 +298,18 @@ public class MedicalRecordDraftService {
                 row.recommendedDepartment(),
                 row.urgency(),
                 row.consultationSummary(),
+                parseRecordJson(firstNonBlank(row.aiRecordJson(), row.recordJson())).recordJson(),
+                parseRecordJson(firstNonBlank(row.editedRecordJson(), row.recordJson())).recordJson(),
                 parsedRecordJson.recordJson(),
-                row.status(),
+                MedicalRecordDraftStatus.parse(row.status()).name(),
+                row.modelName(),
+                row.promptVersion(),
+                row.traceId(),
                 row.createdAt(),
                 row.updatedAt(),
+                row.firstReviewedAt(),
+                row.completedAt(),
+                row.appliedAt(),
                 parsedRecordJson.parseError()
         );
     }
@@ -133,9 +327,10 @@ public class MedicalRecordDraftService {
 
     private String callLlm(MedicalRecordDraftGenerateRequest request) {
         String purpose = LlmClientFactory.PURPOSE_MEDICAL_RECORD_DRAFT;
+        String ragContext = retrieveRagContext(request);
         LlmChatRequest chatRequest = new LlmChatRequest(
                 List.of(
-                        new LlmMessage("system", buildSystemPrompt()),
+                        new LlmMessage("system", ragPromptBuilder.mergeSystemPrompt(buildSystemPrompt(), ragContext)),
                         new LlmMessage("user", buildUserPrompt(request))
                 ),
                 purpose,
@@ -158,6 +353,14 @@ public class MedicalRecordDraftService {
             throw new IllegalStateException("LLM returned empty medical record draft");
         }
         return content.trim();
+    }
+
+    private String retrieveRagContext(MedicalRecordDraftGenerateRequest request) {
+        String query = (request.normalizedConclusion() + "\n" + formatHistory(request.history())).trim();
+        return ragContextFormatter.format(
+                ragRetrievalClient.retrieve(query, RagRetrievalClient.SCENE_MEDICAL_RECORD),
+                ragProperties.getMaxContextChars()
+        );
     }
 
     private JsonNode parseAndValidate(String rawReply) throws JsonProcessingException {
@@ -205,10 +408,83 @@ public class MedicalRecordDraftService {
                 emptyToNull(urgency),
                 request.normalizedConclusion(),
                 recordJson,
+                recordJson,
+                recordJson,
                 rawReply,
-                "DRAFT",
+                MedicalRecordDraftStatus.GENERATED.name(),
+                llmClientFactory.providerForPurpose(LlmClientFactory.PURPOSE_MEDICAL_RECORD_DRAFT).toString(),
+                "medical-record-draft-v1",
+                com.liu.eemrsagent.trace.TraceContext.current().map(com.liu.eemrsagent.trace.TraceContext.State::traceId).orElse(null),
                 createdBy
         );
+    }
+
+    private MedicalRecordDraftRepository.MedicalRecordDraftRow requireDraft(Long id) {
+        return repository.findById(id).orElseThrow(() -> new IllegalArgumentException("draft not found"));
+    }
+
+    private void requireDoctor(AgentUserPrincipal currentUser) {
+        if (currentUser == null || !currentUser.isDoctor()) {
+            throw new ForbiddenException("Only doctors can review medical record drafts");
+        }
+    }
+
+    private void ensureDoctorCanAccess(MedicalRecordDraftRepository.MedicalRecordDraftRow row, AgentUserPrincipal currentUser) {
+        String owner = row.doctorIdNumber();
+        if (owner != null && !owner.isBlank() && !owner.equalsIgnoreCase(currentUser.idNumber())) {
+            throw new ForbiddenException("Doctor cannot access another doctor's draft");
+        }
+    }
+
+    private MedicalRecordDraftApplyRequest emptyApplyRequest() {
+        return new MedicalRecordDraftApplyRequest(null, null, null, null, null, null, null, null, null);
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private String trim(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to hash applied record", e);
+        }
+    }
+
+    private void insertAudit(Long draftId, String doctorIdNumber, MedicalRecordDraftAction action,
+                             String beforeJson, String afterJson, String rejectReason, String comment, String traceId) {
+        repository.insertAudit(draftId, doctorIdNumber, action,
+                redactSensitiveJson(beforeJson), redactSensitiveJson(afterJson),
+                rejectReason, comment, traceId);
+    }
+
+    private String redactSensitiveJson(String json) {
+        if (json == null || json.isBlank()) {
+            return json;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json).deepCopy();
+            JsonNode basic = root.path("patientBasicInfo");
+            if (basic instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
+                objectNode.put("name", "[REDACTED]");
+                objectNode.put("contact", "[REDACTED]");
+                objectNode.put("idNumber", "[REDACTED]");
+            }
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            return "[REDACTED_UNPARSEABLE_JSON]";
+        }
     }
 
     private String buildSystemPrompt() {

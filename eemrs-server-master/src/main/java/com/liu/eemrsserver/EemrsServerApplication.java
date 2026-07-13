@@ -46,7 +46,7 @@ public class EemrsServerApplication {
     }
 
     @Bean
-    @Order(2)
+    @Order(3)
     public ApplicationRunner legacySocketServerRunner() {
         return args -> {
             Thread legacySocketServer = new Thread(this::startLegacySocketServer, "legacy-socket-server");
