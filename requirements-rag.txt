@@ -1,7 +1,0 @@
-pymilvus
-sentence-transformers==2.7.0
-transformers<5
-numpy
-tqdm
-fastapi
-uvicorn
