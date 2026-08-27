@@ -39,9 +39,8 @@ mvn spring-boot:run
 
 ### 3. 启动 RAG 服务
 
-在项目根目录执行：
-
 ```bash
+cd agent-server
 python -m rag.rag_api_server
 ```
 
