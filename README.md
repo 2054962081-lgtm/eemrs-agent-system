@@ -63,4 +63,4 @@ npm run dev
 
 ## 项目作品集
 
-`医疗问诊智能体与可搜索加密电子医疗系统.html` 展示了项目从医疗场景需求、Agent 产品设计到功能实现与 Bad Case 驱动迭代的完整建设过程。
+👉 [在线查看医疗智能体项目作品集](https://2054962081-lgtm.github.io/eemrs-agent-system/)
