@@ -63,4 +63,4 @@ npm run dev
 
 ## 项目作品集
 
-`portfolio.html` 展示了项目从医疗场景需求、Agent 产品设计到 RAG、Memory、Trace、Evaluation Harness 与 Bad Case 驱动迭代的完整建设过程。
+`医疗问诊智能体与可搜索加密电子医疗系统.html` 展示了项目从医疗场景需求、Agent 产品设计到功能实现与 Bad Case 驱动迭代的完整建设过程。
