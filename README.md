@@ -1,10 +1,6 @@
-# EEMRS Agent System
+# EEMRS Agent System 👉 [在线查看医疗智能体项目作品集](https://2054962081-lgtm.github.io/eemrs-agent-system/)
 
 面向电子医疗场景的 AI Agent 系统，集成智能预问诊、科室推荐与挂号、医疗报告分析、病历草稿生成、RAG 检索及分层记忆等能力。
-
-## 项目作品集
-
-👉 [在线查看医疗智能体项目作品集](https://2054962081-lgtm.github.io/eemrs-agent-system/)
 
 ## 项目结构
 
