@@ -1,0 +1,74 @@
+{
+  "dataset_version": "EEMRS-Eval-v1.0",
+  "case_version": "1.3.0",
+  "created_at": "2026-08-23",
+  "frozen_at": "2026-08-23",
+  "refrozen_at": "2026-08-24",
+  "freeze_revision": 2,
+  "status": "FROZEN_FOR_BASELINE",
+  "split_strategy": "DETERMINISTIC_STRATIFIED_SPLIT",
+  "split_seed": 20260823,
+  "split_created_at": "2026-08-23",
+  "holdout_frozen": true,
+  "default_split": "DEV",
+  "counts": {
+    "total": 300,
+    "consultation": 120,
+    "safety": 80,
+    "report": 50,
+    "doctor_draft": 50,
+    "dev": 190,
+    "holdout": 110
+  },
+  "frozen_holdout_manifest": {
+    "holdout_version": "EEMRS-Eval-v1.0",
+    "frozen": true,
+    "split_seed": 20260823,
+    "created_at": "2026-08-23",
+    "refrozen_at": "2026-08-24",
+    "freeze_revision": 2,
+    "case_count": 110
+  },
+  "dataset_hashes": {
+    "consultation_dev.jsonl": "f3aa5b8b02d8e1588d4ca0cc90213e9cb59a6f222b932193df220e0c35e5677b",
+    "consultation_holdout.jsonl": "ecc32d0bb2748a7065ae88578349265d27a3ca7cf16f06397ba90e4f49c62d57",
+    "doctor_draft_dev.jsonl": "3164d282ea0d299a9a877e136ea38ac744b2a2ce722363aae3772d14ffd7b12e",
+    "doctor_draft_holdout.jsonl": "704b819164bf865fa563c142a99a52a0624bc6b34a2f0779ef643800780339ce",
+    "report_dev.jsonl": "383e6084df01ab5f054930f75a104800d4191f60b346d4a15439f6e45b56ccd8",
+    "report_holdout.jsonl": "44bf6817f38768dd69cc00e438f03987c8a72482557954c2672e0c6644df6b34",
+    "safety_dev.jsonl": "caabbc6d1c4a9f42235cb1beb2572e48a3a13a6a9b3bbda19ca957795d2219b2",
+    "safety_holdout.jsonl": "3be507cada1604caacb095cf6f3e38d0163555213884ced7ec9c2f514b89eb4a"
+  },
+  "split_methodology": {
+    "method": "DETERMINISTIC_STRATIFIED_SPLIT",
+    "seed": 20260823,
+    "holdout_name": "Frozen Holdout",
+    "leakage_controls": [
+      "Safety Minimal Pair 不跨 split",
+      "Consultation 按 case_class + patient_behavior_primary 分层",
+      "Safety 按 safety_slice 分层",
+      "Report 按 report_slice 分层",
+      "Doctor Draft 按 draft_slice 分层"
+    ]
+  },
+  "validation_layers": [
+    "Schema Validation",
+    "Distribution Validation",
+    "Semantic Validation",
+    "Final Hardening Validation",
+    "Medical Review"
+  ],
+  "final_consistency_fix": {
+    "revision": 2,
+    "scope": "Baseline 前最终一致性修复，未使用模型 Baseline 结果反向修改数据。",
+    "validators": [
+      "Consultation State Validation",
+      "Report Derived GT Validation",
+      "Multi-Indicator Validation",
+      "Cross-Split Functional Duplicate Validation"
+    ]
+  },
+  "medical_review_status": "PENDING",
+  "source_boundary": "Source Provenance 证明 Case 可追踪到仓库规则、模板或合成规则；医学正确性仍需医学知识源或专家复核。",
+  "next_stage": "Eval Runner -> Baseline -> Bad Case -> A/B -> Regression"
+}

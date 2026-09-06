@@ -90,6 +90,7 @@ public class AgentTraceSchemaInitializer implements ApplicationRunner {
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         UNIQUE KEY uk_agent_step_step_id (step_id),
+                        UNIQUE KEY uk_agent_step_run_sequence (run_id, sequence_no),
                         KEY idx_agent_step_run_id (run_id),
                         KEY idx_agent_step_run_sequence (run_id, sequence_no),
                         KEY idx_agent_step_parent_step_id (parent_step_id),
@@ -98,6 +99,11 @@ public class AgentTraceSchemaInitializer implements ApplicationRunner {
                         KEY idx_agent_step_created_at (created_at)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Agent execution steps'
                     """);
+            try {
+                jdbcTemplate.execute("ALTER TABLE agent_step ADD UNIQUE KEY uk_agent_step_run_sequence (run_id, sequence_no)");
+            } catch (Exception ignored) {
+                // Existing databases may already have the constraint or may need duplicate cleanup before migration.
+            }
             jdbcTemplate.execute("""
                     CREATE TABLE IF NOT EXISTS tool_call (
                         id BIGINT PRIMARY KEY AUTO_INCREMENT,

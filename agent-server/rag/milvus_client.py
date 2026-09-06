@@ -139,6 +139,7 @@ class MedicalRagMilvus:
         doc_type: str | None = None,
         population: str | None = None,
         symptom: str | None = None,
+        output_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         self._ensure_connected()
         if not self.has_collection():
@@ -158,7 +159,7 @@ class MedicalRagMilvus:
             anns_field="embedding",
             limit=top_k,
             filter=filter_expr,
-            output_fields=MILVUS_OUTPUT_FIELDS,
+            output_fields=output_fields or MILVUS_OUTPUT_FIELDS,
             search_params={"metric_type": "COSINE", "params": {}},
         )[0]
 

@@ -26,7 +26,7 @@ def stringify_list(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, list):
-        return "锛?.join(str(item) for item in value)
+        return "；".join(str(item) for item in value)
     return str(value)
 
 
@@ -45,7 +45,7 @@ def split_text(text: str, threshold: int = CHUNK_SPLIT_THRESHOLD, overlap: int =
         end = min(start + threshold, len(text))
         if end < len(text):
             paragraph_break = text.rfind("\n", start, end)
-            sentence_break = max(text.rfind("銆?, start, end), text.rfind("锛?, start, end))
+            sentence_break = max(text.rfind("。", start, end), text.rfind("；", start, end))
             split_at = max(paragraph_break, sentence_break)
             if split_at > start + threshold // 2:
                 end = split_at + 1

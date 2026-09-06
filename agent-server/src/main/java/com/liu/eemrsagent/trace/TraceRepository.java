@@ -26,6 +26,10 @@ public interface TraceRepository {
 
     AgentRunRecord findRun(String runId);
 
+    AgentRunRecord findLatestRunByRequestId(String requestId);
+
+    List<AgentRunRecord> findRunsByRequestId(String requestId);
+
     List<AgentStepRecord> findSteps(String runId);
 
     List<ToolCallRecord> findToolCalls(String runId);

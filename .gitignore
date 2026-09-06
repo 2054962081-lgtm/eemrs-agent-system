@@ -97,3 +97,11 @@ rag_ab_test_cache.json
 volumes/
 milvus/volumes/
 docker/volumes/
+
+# Medical RAG V3 downloaded source material and full-text staging snapshots.
+# Keep provenance, checksums, and derived metadata in git; keep copyrighted/raw
+# documents local unless an explicit license allows redistribution.
+agent-server/rag/sources/raw/
+agent-server/rag/sources/rejected/raw/
+agent-server/rag/sources/parsed_full_text/
+agent-server/rag/sources/staging/

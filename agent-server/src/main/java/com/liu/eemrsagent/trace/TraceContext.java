@@ -32,7 +32,10 @@ public final class TraceContext {
                 blankToNull(sessionId),
                 null,
                 null,
-                "deep-preconsultation-agent"
+                "deep-preconsultation-agent",
+                null,
+                null,
+                null
         );
     }
 
@@ -61,7 +64,7 @@ public final class TraceContext {
     public static State withStep(String stepId) {
         State current = CURRENT.get();
         if (current == null) {
-            current = new State(TraceIds.newTraceId(), TraceIds.newRunId(), null, null, null, "unknown-agent");
+            current = new State(TraceIds.newTraceId(), TraceIds.newRunId(), null, null, null, "unknown-agent", null, null, null);
         }
         State next = current.withCurrentStepId(stepId);
         set(next);
@@ -90,18 +93,28 @@ public final class TraceContext {
             String sessionId,
             String currentStepId,
             String userIdHash,
-            String agentName
+            String agentName,
+            String evalRunId,
+            String evalCaseId,
+            String requestId
     ) {
         public State withCurrentStepId(String stepId) {
-            return new State(traceId, runId, sessionId, stepId, userIdHash, agentName);
+            return new State(traceId, runId, sessionId, stepId, userIdHash, agentName, evalRunId, evalCaseId, requestId);
         }
 
         public State withUserIdHash(String value) {
-            return new State(traceId, runId, sessionId, currentStepId, value, agentName);
+            return new State(traceId, runId, sessionId, currentStepId, value, agentName, evalRunId, evalCaseId, requestId);
         }
 
         public State withAgentName(String value) {
-            return new State(traceId, runId, sessionId, currentStepId, userIdHash, value);
+            return new State(traceId, runId, sessionId, currentStepId, userIdHash, value, evalRunId, evalCaseId, requestId);
+        }
+
+        public State withEvalCorrelation(String evalRunId, String evalCaseId, String requestId) {
+            return new State(
+                    traceId, runId, sessionId, currentStepId, userIdHash, agentName,
+                    blankToNull(evalRunId), blankToNull(evalCaseId), blankToNull(requestId)
+            );
         }
     }
 

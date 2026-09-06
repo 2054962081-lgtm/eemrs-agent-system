@@ -71,7 +71,7 @@ def validate_document(path: Path, data: Any, seen_doc_ids: set[str]) -> list[str
 
 def validate_knowledge_dir(knowledge_dir: Path) -> ValidationResult:
     if not knowledge_dir.exists():
-        raise FileNotFoundError("鏈壘鍒?rag_knowledge 鐩綍锛岃鍏堝垱寤烘湰鍦?JSON 鐭ヨ瘑鏂囦欢銆?)
+        raise FileNotFoundError("未找到 rag_knowledge 目录，请先创建本地 JSON 知识文件。")
     if not knowledge_dir.is_dir():
         raise NotADirectoryError(f"Knowledge path is not a directory: {knowledge_dir}")
 
@@ -112,18 +112,18 @@ def validate_knowledge_dir(knowledge_dir: Path) -> ValidationResult:
 
 
 def print_validation_result(result: ValidationResult) -> None:
-    print(f"JSON 鏂囦欢鎬绘暟: {result.total_files}")
-    print(f"鏈夋晥鏂囦欢鏁? {result.valid_files}")
-    print(f"閿欒鏂囦欢鏁? {len(result.errors)}")
-    print(f"README.md: {'瀛樺湪' if result.readme_exists else '涓嶅瓨鍦?}")
-    print("姣忕被鐩綍 JSON 鏂囦欢鏁伴噺:")
+    print(f"JSON 文件总数: {result.total_files}")
+    print(f"有效文件数: {result.valid_files}")
+    print(f"错误文件数: {len(result.errors)}")
+    print(f"README.md: {'存在' if result.readme_exists else '不存在'}")
+    print("每类目录 JSON 文件数量:")
     for directory, count in sorted(result.directory_counts.items()):
         print(f"- {directory}: {count}")
-    print("姣忕被 doc_type 鏈夋晥鏂囦欢鏁伴噺:")
+    print("每类 doc_type 有效文件数量:")
     for doc_type, count in sorted(result.doc_type_counts.items()):
         print(f"- {doc_type}: {count}")
     if result.errors:
-        print("閿欒璇︽儏:")
+        print("错误详情:")
         for path, error in result.errors:
             print(f"- {path}: {error}")
 

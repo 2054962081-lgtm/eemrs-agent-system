@@ -13,9 +13,19 @@ import com.liu.eemrsagent.rag.RagContextFormatter;
 import com.liu.eemrsagent.rag.RagPromptBuilder;
 import com.liu.eemrsagent.rag.RagProperties;
 import com.liu.eemrsagent.rag.RagRetrievalClient;
+import com.liu.eemrsagent.rag.RagRetrievalResult;
 import com.liu.eemrsagent.security.AgentUserPrincipal;
 import com.liu.eemrsagent.security.ForbiddenException;
+import com.liu.eemrsagent.trace.AgentTraceRecorder;
+import com.liu.eemrsagent.trace.TraceRedactor;
+import com.liu.eemrsagent.trace.TraceRunScope;
+import com.liu.eemrsagent.trace.TraceRunStart;
+import com.liu.eemrsagent.trace.TraceStepData;
+import com.liu.eemrsagent.trace.TraceStepScope;
+import com.liu.eemrsagent.trace.TraceStepType;
 import org.springframework.dao.DataAccessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +35,13 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
 public class MedicalRecordDraftService {
 
+    private static final Logger log = LoggerFactory.getLogger(MedicalRecordDraftService.class);
     private static final String SOURCE_TYPE = "DEEP_PRE_CONSULTATION";
     private static final String RECORD_TYPE = "pre_consultation_draft";
 
@@ -41,6 +53,8 @@ public class MedicalRecordDraftService {
     private final RagPromptBuilder ragPromptBuilder;
     private final RagProperties ragProperties;
     private final CoreMedicalRecordClient coreMedicalRecordClient;
+    private final AgentTraceRecorder traceRecorder;
+    private final TraceRedactor traceRedactor;
 
     public MedicalRecordDraftService(
             LlmClientFactory llmClientFactory,
@@ -50,7 +64,9 @@ public class MedicalRecordDraftService {
             RagContextFormatter ragContextFormatter,
             RagPromptBuilder ragPromptBuilder,
             RagProperties ragProperties,
-            CoreMedicalRecordClient coreMedicalRecordClient
+            CoreMedicalRecordClient coreMedicalRecordClient,
+            AgentTraceRecorder traceRecorder,
+            TraceRedactor traceRedactor
     ) {
         this.llmClientFactory = llmClientFactory;
         this.objectMapper = objectMapper;
@@ -60,23 +76,76 @@ public class MedicalRecordDraftService {
         this.ragPromptBuilder = ragPromptBuilder;
         this.ragProperties = ragProperties;
         this.coreMedicalRecordClient = coreMedicalRecordClient;
+        this.traceRecorder = traceRecorder;
+        this.traceRedactor = traceRedactor;
     }
 
     public MedicalRecordDraftGenerateResponse generate(MedicalRecordDraftGenerateRequest request) {
-        try {
-            request.validate();
-            String rawReply = callLlm(request);
-            JsonNode record = parseAndValidate(rawReply);
-            String recordJson = objectMapper.writeValueAsString(record);
-            MedicalRecordDraftEntity entity = buildEntity(request, record, recordJson, rawReply);
-            Long draftId = repository.save(entity);
-            return MedicalRecordDraftGenerateResponse.ok(draftId, record);
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (DataAccessException e) {
-            return MedicalRecordDraftGenerateResponse.fail("数据库连接或写入失败，请检查 AGENT_DB_URL、AGENT_DB_USERNAME、AGENT_DB_PASSWORD 是否正确，并确认 agent_medical_record_draft 表已创建。");
-        } catch (Exception e) {
-            return MedicalRecordDraftGenerateResponse.fail(e.getMessage());
+        OffsetDateTime requestStart = OffsetDateTime.now();
+        try (TraceRunScope run = traceRecorder.startRun(new TraceRunStart(
+                request == null ? null : request.sessionId(),
+                request == null ? null : request.normalizedPatientIdNumber(),
+                "medical-record-draft-agent",
+                "medical-record-draft-generate",
+                "medical-record-draft-v1",
+                "medical-rag-v1",
+                null,
+                Map.of(
+                        "session_id", request == null ? "" : request.sessionId(),
+                        "patient_id", request == null ? "" : String.valueOf(request.patientId()),
+                        "request_start", requestStart.toString()
+                )
+        ))) {
+            try {
+                request.validate();
+                String rawReply = callLlm(request);
+                JsonNode record = parseAndValidate(rawReply);
+                String recordJson = objectMapper.writeValueAsString(record);
+                MedicalRecordDraftEntity entity = buildEntity(request, record, recordJson, rawReply);
+                Long draftId = repository.save(entity);
+                run.success(Map.of(
+                        "draft_id", draftId,
+                        "success", true,
+                        "jvm_request_status", "SUCCESS",
+                        "response_status", "SUCCESS",
+                        "request_start", requestStart.toString(),
+                        "request_end", OffsetDateTime.now().toString()
+                ), null, null, null);
+                return MedicalRecordDraftGenerateResponse.ok(draftId, record);
+            } catch (IllegalArgumentException e) {
+                run.fail("BAD_REQUEST", e.getMessage());
+                throw e;
+            } catch (DataAccessException e) {
+                String message = "数据库连接或写入失败，请检查 AGENT_DB_URL、AGENT_DB_USERNAME、AGENT_DB_PASSWORD 是否正确，并确认 agent_medical_record_draft 表已创建。";
+                run.fail("DB_WRITE_FAILED", e.getMessage());
+                log.warn("medical_record_draft_request_failed request_start={} request_end={} exception_stage=db exception_class={} response_status=FAILED",
+                        requestStart, OffsetDateTime.now(), e.getClass().getName());
+                return MedicalRecordDraftGenerateResponse.fail("DB_WRITE_FAILED", message);
+            } catch (JsonProcessingException e) {
+                String errorCode = "MODEL_RESPONSE_JSON_INVALID";
+                run.fail(errorCode, e.getOriginalMessage());
+                log.warn("medical_record_draft_request_failed request_start={} request_end={} exception_stage=upstream_model exception_class={} response_status=FAILED raw_error={}",
+                        requestStart, OffsetDateTime.now(), e.getClass().getName(), e.getMessage());
+                return MedicalRecordDraftGenerateResponse.fail(errorCode, safeDraftErrorMessage(errorCode));
+            } catch (LlmException e) {
+                String errorCode = classifyDraftModelError(e);
+                run.fail(errorCode, e.getMessage());
+                log.warn("medical_record_draft_request_failed request_start={} request_end={} exception_stage=upstream_model exception_class={} response_status=FAILED raw_error={}",
+                        requestStart, OffsetDateTime.now(), e.getClass().getName(), e.getMessage());
+                return MedicalRecordDraftGenerateResponse.fail(errorCode, safeDraftErrorMessage(errorCode));
+            } catch (ModelResponseEmptyException e) {
+                String errorCode = "MODEL_RESPONSE_EMPTY";
+                run.fail(errorCode, e.getMessage());
+                log.warn("medical_record_draft_request_failed request_start={} request_end={} exception_stage=upstream_model exception_class={} response_status=FAILED",
+                        requestStart, OffsetDateTime.now(), e.getClass().getName());
+                return MedicalRecordDraftGenerateResponse.fail(errorCode, safeDraftErrorMessage(errorCode));
+            } catch (Exception e) {
+                String errorCode = classifyDraftError(e);
+                run.fail(errorCode, e.getMessage());
+                log.warn("medical_record_draft_request_failed request_start={} request_end={} exception_stage={} exception_class={} response_status=FAILED",
+                        requestStart, OffsetDateTime.now(), exceptionStage(errorCode), e.getClass().getName());
+                return MedicalRecordDraftGenerateResponse.fail(errorCode, safeDraftErrorMessage(errorCode));
+            }
         }
     }
 
@@ -345,22 +414,172 @@ public class MedicalRecordDraftService {
         try {
             response = llmClientFactory.chatForPurpose(purpose, chatRequest);
         } catch (LlmException e) {
-            throw new IllegalStateException(e.getMessage(), e);
+            throw e;
         }
 
         String content = response.content();
         if (content == null || content.isBlank()) {
-            throw new IllegalStateException("LLM returned empty medical record draft");
+            throw new ModelResponseEmptyException("LLM returned empty medical record draft");
         }
         return content.trim();
     }
 
+    private String classifyDraftError(Exception e) {
+        Throwable current = e;
+        while (current != null) {
+            String name = current.getClass().getName();
+            String message = current.getMessage() == null ? "" : current.getMessage();
+            if (name.contains("LlmException") || message.contains("DeepSeek")) {
+                return classifyDraftModelError(current);
+            }
+            current = current.getCause();
+        }
+        return "RUNTIME_ERROR";
+    }
+
+    private String classifyDraftModelError(Throwable e) {
+        Throwable current = e;
+        while (current != null) {
+            String message = current.getMessage() == null ? "" : current.getMessage();
+            if (message.contains("返回内容为空") || message.toLowerCase().contains("empty")) {
+                return "MODEL_RESPONSE_EMPTY";
+            }
+            current = current.getCause();
+        }
+        return "MODEL_CALL_FAILED";
+    }
+
+    private String safeDraftErrorMessage(String errorCode) {
+        return switch (errorCode) {
+            case "MODEL_CALL_FAILED" -> "云端模型调用失败，请稍后重试。";
+            case "MODEL_RESPONSE_EMPTY" -> "云端模型返回为空，请稍后重试。";
+            case "MODEL_RESPONSE_JSON_INVALID" -> "云端模型返回内容格式异常，请稍后重试。";
+            case "DB_WRITE_FAILED" -> "病历草稿写入失败，请稍后重试。";
+            default -> "病历草稿生成失败，请稍后重试。";
+        };
+    }
+
+    private String exceptionStage(String errorCode) {
+        return errorCode.startsWith("MODEL_") ? "upstream_model" : "jvm_request";
+    }
+
+    private static class ModelResponseEmptyException extends RuntimeException {
+        private ModelResponseEmptyException(String message) {
+            super(message);
+        }
+    }
+
     private String retrieveRagContext(MedicalRecordDraftGenerateRequest request) {
         String query = (request.normalizedConclusion() + "\n" + formatHistory(request.history())).trim();
-        return ragContextFormatter.format(
-                ragRetrievalClient.retrieve(query, RagRetrievalClient.SCENE_MEDICAL_RECORD),
-                ragProperties.getMaxContextChars()
-        );
+        RagRetrievalResult result;
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.RAG_REQUEST, "call rag retrieval service",
+                null, Map.of(
+                        "agent", "doctor_draft",
+                        "scene", RagRetrievalClient.SCENE_MEDICAL_RECORD,
+                        "query_length", query.length(),
+                        "query_hash", traceRedactor.stableHash(query),
+                        "top_k", Math.max(ragProperties.getTopK(), 10),
+                        "service_url", ragProperties.getServiceUrl()
+                ))) {
+            result = ragRetrievalClient.retrieveWithMetadata(query, RagRetrievalClient.SCENE_MEDICAL_RECORD);
+            step.success(TraceStepData.of(null, Map.of(
+                    "result_count", result.chunks().size(),
+                    "used_query_expansion", result.usedQueryExpansion(),
+                    "expanded_query", result.expandedQuery()
+            ), Map.of("doc_type_counts", result.docTypeCounts())));
+        }
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.RAG_RETRIEVAL, "rag retrieval results",
+                null, Map.of("agent", "doctor_draft", "scene", RagRetrievalClient.SCENE_MEDICAL_RECORD))) {
+            step.success(TraceStepData.of(null, retrievalEvidence(result), Map.of(
+                    "result_count", result.chunks().size(),
+                    "doc_type_counts", result.docTypeCounts(),
+                    "retrieval_selection", result.traceMeta().getOrDefault("retrieval_selection", Map.of()),
+                    "retrieval_mode", retrievalMode(result)
+            )));
+        }
+        RagContextFormatter.FormattedContext formattedContext = ragContextFormatter.formatWithTrace(
+                result.chunks(), ragProperties.getMaxContextChars());
+        recordFinalRagContext(result, formattedContext);
+        return formattedContext.context();
+    }
+
+    private List<Map<String, Object>> retrievalEvidence(RagRetrievalResult result) {
+        List<Map<String, Object>> evidence = new ArrayList<>();
+        int rank = 1;
+        for (var chunk : result.chunks()) {
+            evidence.add(Map.of(
+                    "rank", rank++,
+                    "document_id", blankToDefault(chunk.docId(), ""),
+                    "chunk_id", blankToDefault(chunk.chunkId(), ""),
+                    "doc_type", blankToDefault(chunk.docType(), ""),
+                    "retrieval_score", chunk.score() == null ? 0.0 : chunk.score(),
+                    "rerank_score", chunk.finalScore() == null ? (chunk.score() == null ? 0.0 : chunk.score()) : chunk.finalScore(),
+                    "title_hash", traceRedactor.stableHash(chunk.title()),
+                    "content_hash", traceRedactor.stableHash(chunk.chunkText())
+            ));
+        }
+        return evidence;
+    }
+
+    private void recordFinalRagContext(RagRetrievalResult result, RagContextFormatter.FormattedContext formattedContext) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.RAG_RETRIEVAL, "final rag context",
+                null, Map.of("agent", "doctor_draft", "scene", RagRetrievalClient.SCENE_MEDICAL_RECORD))) {
+            step.success(TraceStepData.of(null, Map.of(
+                    "retrieval_used", !result.chunks().isEmpty(),
+                    "selected_chunks", selectedChunkIds(result),
+                    "final_context_chunk_order", formattedContext.finalContextChunkOrder(),
+                    "final_context_length", safeLength(formattedContext.context()),
+                    "final_context_hash", traceRedactor.stableHash(formattedContext.context()),
+                    "context_transform", Map.of(
+                            "retrieved_count", result.chunks().size(),
+                            "selected_count", result.chunks().size(),
+                            "final_context_count", formattedContext.finalContextChunkOrder().size(),
+                            "dropped_chunks", formattedContext.droppedChunkIds(),
+                            "duplicate_chunks", formattedContext.duplicateChunkIds(),
+                            "drop_reason", formattedContext.dropReason()
+                    )
+            ), Map.of(
+                    "retrieval_mode", retrievalMode(result),
+                    "trace_id", result.traceMeta().getOrDefault("trace_id", ""),
+                    "run_id", result.traceMeta().getOrDefault("run_id", ""),
+                    "step_id", result.traceMeta().getOrDefault("step_id", ""),
+                    "latency", retrievalLatency(result)
+            )));
+        }
+    }
+
+    private List<String> selectedChunkIds(RagRetrievalResult result) {
+        return result.chunks().stream()
+                .map(chunk -> blankToDefault(chunk.chunkId(), ""))
+                .filter(value -> !value.isBlank())
+                .toList();
+    }
+
+    private Object retrievalLatency(RagRetrievalResult result) {
+        Object hybrid = result.traceMeta().get("hybrid_retrieval");
+        if (hybrid instanceof Map<?, ?> hybridMap) {
+            Object latency = hybridMap.get("latency");
+            return latency == null ? Map.of() : latency;
+        }
+        Object bm25 = result.traceMeta().get("bm25_retrieval");
+        if (bm25 instanceof Map<?, ?> bm25Map) {
+            Object latency = bm25Map.get("latency");
+            return latency == null ? Map.of() : latency;
+        }
+        return Map.of();
+    }
+
+    private String retrievalMode(RagRetrievalResult result) {
+        Object hybrid = result.traceMeta().get("hybrid_retrieval");
+        if (hybrid instanceof Map<?, ?> hybridMap) {
+            Object mode = hybridMap.get("retrieval_mode");
+            return mode == null ? "" : String.valueOf(mode);
+        }
+        Object bm25 = result.traceMeta().get("bm25_retrieval");
+        if (bm25 instanceof Map<?, ?>) {
+            return "bm25";
+        }
+        return "dense";
     }
 
     private JsonNode parseAndValidate(String rawReply) throws JsonProcessingException {
@@ -447,6 +666,14 @@ public class MedicalRecordDraftService {
             }
         }
         return "";
+    }
+
+    private String blankToDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private int safeLength(String value) {
+        return value == null ? 0 : value.length();
     }
 
     private String trim(String value) {

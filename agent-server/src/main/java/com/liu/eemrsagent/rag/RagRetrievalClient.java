@@ -77,7 +77,8 @@ public class RagRetrievalClient {
                     chunks,
                     response.expandedQuery() == null ? "" : response.expandedQuery(),
                     docTypeCounts,
-                    Boolean.TRUE.equals(response.usedQueryExpansion())
+                    Boolean.TRUE.equals(response.usedQueryExpansion()),
+                    response.traceMeta() == null ? Map.of() : response.traceMeta()
             );
         } catch (RuntimeException e) {
             return handleFailure("RAG retrieval failed: " + e.getMessage());

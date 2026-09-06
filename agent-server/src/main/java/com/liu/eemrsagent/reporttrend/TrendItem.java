@@ -6,6 +6,11 @@ import java.time.LocalDate;
 public record TrendItem(
         String code,
         String name,
+        String unit,
+        int pointCount,
+        LocalDate firstDate,
+        LocalDate latestDate,
+        BigDecimal firstValue,
         BigDecimal latestValue,
         BigDecimal previousValue,
         BigDecimal minValue,

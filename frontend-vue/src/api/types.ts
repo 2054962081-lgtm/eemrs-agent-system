@@ -33,11 +33,17 @@ export interface RegisterRequest {
 }
 
 export interface DoctorInfo {
+  doctorId?: string
   idNumber: string
+  doctorName?: string
   userName: string
   idHashCode?: string
   gender?: string
   department?: string
+  title?: string
+  position?: string
+  specialty?: string
+  introduction?: string
 }
 
 export interface PatientInfo {
@@ -69,6 +75,24 @@ export interface CreateAppointmentRequest {
   idNumber: string
   userName: string
   doctorIdNumber: string
+}
+
+export interface AgentAppointmentRequest {
+  department: string
+  doctorId: string
+  source?: 'DEEP_INQUIRY' | string
+}
+
+export interface AgentAppointmentResponse {
+  success: boolean
+  department: string
+  doctorId: string
+  doctorName: string
+  patientIdNumber: string
+  patientName: string
+  status: string
+  visitTime: number | string
+  source?: string
 }
 
 export interface MedicalRecordRequest {

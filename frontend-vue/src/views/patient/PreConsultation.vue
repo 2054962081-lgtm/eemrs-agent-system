@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { ChatDotRound, Connection, Document, FirstAidKit, Promotion, Refresh } from '@element-plus/icons-vue'
+import { ChatDotRound, Connection, FirstAidKit, Promotion, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PageContainer from '../../components/PageContainer.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -12,6 +12,8 @@ import {
   type MedicalRecordDraftGenerateResponse,
   type PreConsultationResponse,
 } from '../../api/agent'
+import { createAgentAppointment } from '../../api/appointment'
+import { getDoctorsByDepartment } from '../../api/doctor'
 import {
   appendShortTermQuestionAnswer,
   completeShortTermMemorySession,
@@ -19,11 +21,31 @@ import {
   getMemoryContext,
   type MemoryContext,
 } from '../../api/memory'
+import type { AgentAppointmentResponse, DoctorInfo } from '../../api/types'
 
 type ConsultationMode = 'quick' | 'deep'
+type ChatMessageType =
+  | 'text'
+  | 'triage_result'
+  | 'doctor_list'
+  | 'registration_success'
+  | 'error'
 
 interface ChatMessage extends AgentMessage {
+  id?: string
+  type?: ChatMessageType
   pending?: boolean
+  department?: string
+  doctors?: DoctorInfo[]
+  selectedDoctor?: DoctorInfo
+  appointment?: AgentAppointmentResponse
+  handled?: boolean
+  loadingDoctors?: boolean
+}
+
+interface SubmitOptions {
+  displayUserMessage?: boolean
+  displayAssistantReply?: boolean
 }
 
 const selectedMode = ref<ConsultationMode | ''>('')
@@ -44,6 +66,11 @@ const consultationConclusion = ref('')
 const draftResult = ref<MedicalRecordDraftGenerateResponse | null>(null)
 const chatBodyRef = ref<HTMLElement | null>(null)
 const authStore = useAuthStore()
+const queryingDoctorMessageId = ref('')
+const registeringDoctorId = ref('')
+const registrationCompleted = ref(false)
+const lastRecommendedDepartment = ref('')
+const registrationEnding = ref(false)
 
 const modeText = computed(() => (selectedMode.value === 'quick' ? '快速问诊' : '深度问诊'))
 const statusText = computed(() => {
@@ -52,21 +79,107 @@ const statusText = computed(() => {
   }
   return '结构化问诊中'
 })
-const canGenerateDraft = computed(() => (
+const canShowAgentRegistration = computed(() => (
   selectedMode.value === 'deep'
-  && finished.value
-  && Boolean(consultationConclusion.value)
   && messages.value.some((message) => message.role === 'user' && message.content.trim())
+  && !registrationCompleted.value
 ))
-const draftRecord = computed(() => draftResult.value?.record)
-const possibleDirections = computed(() => draftRecord.value?.preliminaryAssessment?.possibleDirections || [])
-const redFlags = computed(() => draftRecord.value?.riskAssessment?.redFlags || [])
-const missingInformation = computed(() => draftRecord.value?.doctorReviewTips?.missingInformation || [])
-const generalAdvice = computed(() => draftRecord.value?.careAdvice?.generalAdvice || [])
-const fullDraftJson = computed(() => (draftRecord.value ? JSON.stringify(draftRecord.value, null, 2) : ''))
 
 function createSessionId() {
   return `pre-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function createMessageId(prefix = 'msg') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function getDoctorId(doctor: DoctorInfo) {
+  return doctor.doctorId || doctor.idNumber
+}
+
+function getDoctorName(doctor?: DoctorInfo) {
+  return doctor?.doctorName || doctor?.userName || '未提供'
+}
+
+function getDoctorTitle(doctor: DoctorInfo) {
+  return doctor.title || doctor.position || '暂无职称信息'
+}
+
+function getDoctorSpecialty(doctor: DoctorInfo) {
+  return doctor.specialty || doctor.introduction || '暂无简介'
+}
+
+function normalizeDepartment(department?: string) {
+  return (department || '')
+    .replace(/^优先建议[:：]?/, '')
+    .replace(/^建议优先就诊/, '')
+    .replace(/^[:：\s]+/, '')
+    .replace(/[。；;，,].*$/, '')
+    .trim()
+}
+
+function extractRecommendedDepartmentFromReply(reply?: string) {
+  if (!reply) {
+    return ''
+  }
+  const lines = reply.split(/\r?\n/)
+  const headingIndex = lines.findIndex((line) => line.includes('推荐科室'))
+  const candidates = headingIndex >= 0 ? lines.slice(headingIndex + 1, headingIndex + 5) : lines
+  for (const line of candidates) {
+    const normalized = normalizeDepartment(line)
+    if (normalized && /科|门诊|医学/.test(normalized)) {
+      return normalized
+    }
+  }
+  const inline = reply.match(/(?:推荐科室|优先建议|建议优先就诊)[:：]?\s*([^\n。；;，,]+)/)
+  return normalizeDepartment(inline?.[1])
+}
+
+function getLatestAssistantText() {
+  return [...messages.value]
+    .reverse()
+    .find((message) => message.role === 'assistant' && (!message.type || message.type === 'text' || message.type === 'triage_result'))
+    ?.content
+    .trim() || ''
+}
+
+function getDraftRecommendedDepartment() {
+  return normalizeDepartment(draftResult.value?.record?.visitInfo?.recommendedDepartment?.primary)
+}
+
+function formatAppointmentTime(value?: number | string) {
+  if (!value) {
+    return '已由系统记录'
+  }
+  const raw = String(value).trim()
+  let date: Date
+  if (/^\d{14}$/.test(raw)) {
+    date = new Date(
+      Number(raw.slice(0, 4)),
+      Number(raw.slice(4, 6)) - 1,
+      Number(raw.slice(6, 8)),
+      Number(raw.slice(8, 10)),
+      Number(raw.slice(10, 12)),
+      Number(raw.slice(12, 14)),
+    )
+  } else if (/^\d+$/.test(raw)) {
+    date = new Date(Number(raw))
+  } else {
+    date = new Date(raw)
+  }
+  if (Number.isNaN(date.getTime())) {
+    return raw
+  }
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function getDepartmentCandidates(department: string) {
+  const normalized = normalizeDepartment(department)
+  const candidates = [normalized]
+  if (normalized && normalized !== '内科' && normalized.endsWith('内科')) {
+    candidates.push('内科')
+  }
+  return [...new Set(candidates.filter(Boolean))]
 }
 
 function scrollToBottom() {
@@ -106,6 +219,11 @@ function resetDraftState() {
   draftErrorText.value = ''
   consultationConclusion.value = ''
   draftResult.value = null
+  queryingDoctorMessageId.value = ''
+  registeringDoctorId.value = ''
+  registrationCompleted.value = false
+  lastRecommendedDepartment.value = ''
+  registrationEnding.value = false
 }
 
 function resetConversation(keepMode = true) {
@@ -127,24 +245,28 @@ function switchMode() {
   resetConversation()
 }
 
-async function submit(customQuestion?: string) {
+async function submit(customQuestion?: string, options: SubmitOptions = {}) {
   if (!selectedMode.value || loading.value || finished.value) {
-    return
+    return null
   }
 
   const value = (customQuestion ?? question.value).trim()
   if (!value) {
-    return
+    return null
   }
 
+  const displayUserMessage = options.displayUserMessage !== false
+  const displayAssistantReply = options.displayAssistantReply !== false
   const isSummaryRequest = selectedMode.value === 'deep' && Boolean(customQuestion)
   const nextRound = selectedMode.value === 'quick' ? Math.min(round.value + 1, 3) : round.value + 1
   const history = messages.value
-    .filter((message) => !message.pending)
+    .filter((message) => !message.pending && (!message.type || message.type === 'text' || message.type === 'triage_result'))
     .map(({ role, content }) => ({ role, content }))
 
-  messages.value.push({ role: 'user', content: value })
-  question.value = ''
+  if (displayUserMessage) {
+    messages.value.push({ role: 'user', content: value })
+    question.value = ''
+  }
   loading.value = true
   errorText.value = ''
   draftErrorText.value = ''
@@ -173,11 +295,19 @@ async function submit(customQuestion?: string) {
       ElMessage.warning(errorText.value)
     }
     const assistantReply = result.reply || '本次未返回有效内容，请稍后重试。'
-    messages.value.push({
-      role: 'assistant',
-      content: assistantReply,
-    })
-    if (isSummaryRequest && result.success) {
+    const recommendedDepartment = normalizeDepartment(result.recommendedDepartment)
+      || extractRecommendedDepartmentFromReply(assistantReply)
+    if (recommendedDepartment) {
+      lastRecommendedDepartment.value = recommendedDepartment
+    }
+    if (displayAssistantReply) {
+      messages.value.push({
+        role: 'assistant',
+        type: result.finished ? 'triage_result' : 'text',
+        content: assistantReply,
+      })
+    }
+    if ((isSummaryRequest || result.finished) && result.success) {
       consultationConclusion.value = assistantReply
     }
     await runMemoryTask(async () => {
@@ -192,29 +322,185 @@ async function submit(customQuestion?: string) {
     if (finished.value) {
       await runMemoryTask(() => completeShortTermMemorySession(sessionId.value, {
         summary: isSummaryRequest ? assistantReply : undefined,
-        department: result.recommendedDepartment,
+        department: recommendedDepartment || result.recommendedDepartment,
         sourceId: sessionId.value,
       }))
     }
+    if (result.success && selectedMode.value === 'deep' && result.finished) {
+      await generateDraft()
+    }
+    return result
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     errorText.value = message.includes('timeout')
       ? 'AI 回复生成时间较长，请稍后重试；如使用云端模型，请检查网络、模型额度和后端超时配置。'
       : 'AI 预问诊请求失败，请稍后重试。'
-    messages.value.push({ role: 'assistant', content: errorText.value })
+    messages.value.push({ role: 'assistant', type: 'error', content: errorText.value })
     ElMessage.warning(errorText.value)
+    return null
   } finally {
     loading.value = false
     scrollToBottom()
   }
 }
 
-function finishDeepConsultation() {
-  submit('请根据以上信息生成深度问诊总结和科室建议')
+async function startAgentRegistration() {
+  if (
+    selectedMode.value !== 'deep'
+    || registrationEnding.value
+    || loading.value
+    || queryingDoctorMessageId.value
+    || registeringDoctorId.value
+    || registrationCompleted.value
+  ) {
+    return
+  }
+
+  registrationEnding.value = true
+  try {
+    if (!finished.value) {
+      finished.value = true
+      const latestConclusion = getLatestAssistantText()
+      consultationConclusion.value = latestConclusion || '用户点击一键挂号结束深度问诊。'
+      const department = normalizeDepartment(lastRecommendedDepartment.value)
+        || extractRecommendedDepartmentFromReply(consultationConclusion.value)
+      await runMemoryTask(() => completeShortTermMemorySession(sessionId.value, {
+        summary: consultationConclusion.value,
+        department,
+        sourceId: sessionId.value,
+      }))
+    }
+    await generateDraft()
+
+    const department = normalizeDepartment(lastRecommendedDepartment.value)
+      || extractRecommendedDepartmentFromReply(consultationConclusion.value)
+      || getDraftRecommendedDepartment()
+    if (!department) {
+      ElMessage.warning('暂未识别到推荐科室，请补充症状后再试。')
+      return
+    }
+    await queryDoctorsForRegistration({
+      id: createMessageId('registration-action'),
+      role: 'assistant',
+      type: 'text',
+      content: '',
+      department,
+    })
+  } finally {
+    registrationEnding.value = false
+  }
+}
+
+async function queryDoctorsForRegistration(message: ChatMessage) {
+  const department = normalizeDepartment(message.department)
+  if (!department || message.handled || queryingDoctorMessageId.value) {
+    return
+  }
+
+  message.handled = true
+  message.loadingDoctors = true
+  queryingDoctorMessageId.value = message.id || 'registration-confirm'
+  messages.value.push({
+    id: createMessageId('doctor-querying'),
+    role: 'assistant',
+    type: 'text',
+    content: `正在为您查询 ${department} 医生...`,
+    department,
+  })
+  scrollToBottom()
+
+  try {
+    let matchedDepartment = department
+    let doctors: DoctorInfo[] = []
+    for (const candidate of getDepartmentCandidates(department)) {
+      doctors = await getDoctorsByDepartment(candidate)
+      if (doctors.length) {
+        matchedDepartment = candidate
+        break
+      }
+    }
+    if (!doctors.length) {
+      messages.value.push({
+        id: createMessageId('doctor-empty'),
+        role: 'assistant',
+        type: 'text',
+        content: '当前推荐科室暂无可挂号医生，请稍后再试或前往挂号页面手动选择。',
+        department,
+      })
+      return
+    }
+    messages.value.push({
+      id: createMessageId('doctor-list'),
+      role: 'assistant',
+      type: 'doctor_list',
+      content: `${matchedDepartment} 医生列表`,
+      department: matchedDepartment,
+      doctors,
+    })
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : '医生列表查询失败'
+    messages.value.push({
+      id: createMessageId('doctor-query-error'),
+      role: 'assistant',
+      type: 'error',
+      content: `医生列表查询失败：${messageText}`,
+      department,
+    })
+  } finally {
+    message.loadingDoctors = false
+    queryingDoctorMessageId.value = ''
+    scrollToBottom()
+  }
+}
+
+async function registerDoctor(department: string | undefined, doctor: DoctorInfo) {
+  const targetDepartment = normalizeDepartment(department)
+  const doctorId = getDoctorId(doctor)
+  if (!targetDepartment || !doctorId || registeringDoctorId.value || registrationCompleted.value) {
+    return
+  }
+
+  registeringDoctorId.value = doctorId
+  try {
+    const appointment = await createAgentAppointment({
+      department: targetDepartment,
+      doctorId,
+      source: 'DEEP_INQUIRY',
+    })
+    registrationCompleted.value = true
+    messages.value.push({
+      id: createMessageId('registration-success'),
+      role: 'assistant',
+      type: 'registration_success',
+      content: '挂号成功',
+      department: targetDepartment,
+      selectedDoctor: doctor,
+      appointment,
+    })
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : '挂号失败，请稍后再试'
+    messages.value.push({
+      id: createMessageId('registration-error'),
+      role: 'assistant',
+      type: 'error',
+      content: `挂号失败：${messageText}`,
+      department: targetDepartment,
+      selectedDoctor: doctor,
+    })
+  } finally {
+    registeringDoctorId.value = ''
+    scrollToBottom()
+  }
 }
 
 async function generateDraft() {
-  if (!canGenerateDraft.value || draftLoading.value) {
+  if (
+    selectedMode.value !== 'deep'
+    || !finished.value
+    || !consultationConclusion.value
+    || draftLoading.value
+    || draftResult.value?.success
+  ) {
     return
   }
 
@@ -236,7 +522,6 @@ async function generateDraft() {
       return
     }
     draftResult.value = result
-    ElMessage.success('病历草稿生成成功')
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     draftErrorText.value = message.includes('timeout')
@@ -246,14 +531,6 @@ async function generateDraft() {
   } finally {
     draftLoading.value = false
   }
-}
-
-async function copyDraftJson() {
-  if (!fullDraftJson.value) {
-    return
-  }
-  await navigator.clipboard.writeText(fullDraftJson.value)
-  ElMessage.success('病历草稿 JSON 已复制')
 }
 
 onMounted(() => {
@@ -320,7 +597,46 @@ onMounted(() => {
           :class="message.role"
         >
           <div class="message-bubble">
-            {{ message.content }}
+            <template v-if="message.type === 'doctor_list'">
+              <div class="doctor-list-title">{{ message.department }} 医生列表</div>
+              <div class="doctor-card-list">
+                <div v-for="doctor in message.doctors" :key="getDoctorId(doctor)" class="doctor-card">
+                  <div class="doctor-card-main">
+                    <strong>{{ getDoctorName(doctor) }}</strong>
+                    <span>{{ doctor.department || message.department }}</span>
+                    <span>{{ getDoctorTitle(doctor) }}</span>
+                    <p>{{ getDoctorSpecialty(doctor) }}</p>
+                  </div>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="registeringDoctorId === getDoctorId(doctor)"
+                    :disabled="registrationCompleted || Boolean(registeringDoctorId)"
+                    @click="registerDoctor(message.department, doctor)"
+                  >
+                    选择并挂号
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="message.type === 'registration_success'">
+              <div class="success-title">挂号成功</div>
+              <el-descriptions :column="1" size="small" border>
+                <el-descriptions-item label="推荐科室">{{ message.department || message.appointment?.department }}</el-descriptions-item>
+                <el-descriptions-item label="已选择医生">
+                  {{ message.appointment?.doctorName || getDoctorName(message.selectedDoctor) }}
+                </el-descriptions-item>
+                <el-descriptions-item label="挂号状态">{{ message.appointment?.status || '待就诊' }}</el-descriptions-item>
+                <el-descriptions-item label="挂号时间">
+                  {{ formatAppointmentTime(message.appointment?.visitTime) }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </template>
+
+            <template v-else>
+              {{ message.content }}
+            </template>
           </div>
         </div>
       </div>
@@ -338,21 +654,18 @@ onMounted(() => {
         class="chat-alert"
         type="info"
         :closable="false"
-        title="深度问诊总结已生成。可继续生成预问诊病历草稿，该草稿需由医生审核确认。"
+        title="深度问诊已结束。"
       />
 
       <div v-if="selectedMode === 'deep'" class="deep-actions">
-        <el-button :disabled="loading || messages.length === 0 || finished" @click="finishDeepConsultation">
-          结束并生成总结
-        </el-button>
         <el-button
-          type="primary"
-          :icon="Document"
-          :loading="draftLoading"
-          :disabled="!canGenerateDraft"
-          @click="generateDraft"
+          v-if="canShowAgentRegistration"
+          type="success"
+          :loading="registrationEnding || draftLoading || Boolean(queryingDoctorMessageId)"
+          :disabled="loading || Boolean(registeringDoctorId)"
+          @click="startAgentRegistration"
         >
-          生成病历草稿
+          一键挂号
         </el-button>
       </div>
 
@@ -387,77 +700,12 @@ onMounted(() => {
       </div>
     </section>
 
-    <section v-if="draftRecord" class="draft-panel">
-      <div class="draft-header">
-        <div class="panel-title">
-          <el-icon><Document /></el-icon>
-          <span>病历草稿</span>
-          <small v-if="draftResult?.draftId">Draft ID: {{ draftResult.draftId }}</small>
-        </div>
-        <el-button @click="copyDraftJson">复制 JSON</el-button>
-      </div>
-
-      <el-alert
-        class="draft-notice"
-        type="warning"
-        :closable="false"
-        title="该内容为智能体根据预问诊信息生成的病历草稿，仅供医生参考，不能替代医生诊断，需由医生审核确认后方可作为正式病历。"
-      />
-
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="主诉">
-          {{ draftRecord.chiefComplaint?.text || '未提供' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="现病史">
-          {{ JSON.stringify(draftRecord.presentIllnessHistory || {}, null, 2) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="推荐科室">
-          {{ draftRecord.visitInfo?.recommendedDepartment?.primary || '未提供' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="就诊优先级">
-          {{ draftRecord.visitInfo?.urgency?.level || 'normal' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="可能相关方向">
-          <div v-if="possibleDirections.length" class="inline-list">
-            <span v-for="(item, index) in possibleDirections" :key="index">
-              {{ item.name || '未提供' }}：{{ item.basis || '依据未提供' }}
-            </span>
-          </div>
-          <span v-else>未提供</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="危险信号">
-          <div v-if="redFlags.length" class="inline-list">
-            <span v-for="(item, index) in redFlags" :key="index">{{ item }}</span>
-          </div>
-          <span v-else>未提供</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="建议进一步确认的信息">
-          <div v-if="missingInformation.length" class="inline-list">
-            <span v-for="(item, index) in missingInformation" :key="index">{{ item }}</span>
-          </div>
-          <span v-else>未提供</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="居家和就医建议">
-          <div v-if="generalAdvice.length" class="inline-list">
-            <span v-for="(item, index) in generalAdvice" :key="index">{{ item }}</span>
-          </div>
-          <span v-else>{{ draftRecord.careAdvice?.followUpAdvice || '未提供' }}</span>
-        </el-descriptions-item>
-      </el-descriptions>
-
-      <el-collapse class="draft-json">
-        <el-collapse-item title="完整 JSON" name="json">
-          <pre>{{ fullDraftJson }}</pre>
-        </el-collapse-item>
-      </el-collapse>
-    </section>
   </PageContainer>
 </template>
 
 <style scoped>
 .mode-panel,
-.chat-panel,
-.draft-panel {
+.chat-panel {
   background: #fff;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -465,13 +713,8 @@ onMounted(() => {
   padding: 18px;
 }
 
-.draft-panel {
-  margin-top: 16px;
-}
-
 .mode-heading,
 .chat-header,
-.draft-header,
 .panel-title,
 .header-actions,
 .health-state,
@@ -482,8 +725,7 @@ onMounted(() => {
 }
 
 .mode-heading,
-.chat-header,
-.draft-header {
+.chat-header {
   justify-content: space-between;
   gap: 16px;
 }
@@ -604,11 +846,45 @@ onMounted(() => {
   color: var(--color-text);
 }
 
+.doctor-list-title,
+.success-title {
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.doctor-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.doctor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.doctor-card-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.doctor-card-main span,
+.doctor-card-main p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .chat-alert,
 .deep-actions,
-.composer,
-.draft-notice,
-.draft-json {
+.composer {
   margin-top: 12px;
 }
 
@@ -627,33 +903,20 @@ onMounted(() => {
   min-width: 96px;
 }
 
-.inline-list {
-  display: grid;
-  gap: 6px;
-  white-space: pre-wrap;
-}
-
-.draft-json pre {
-  max-height: 360px;
-  overflow: auto;
-  margin: 0;
-  padding: 12px;
-  background: #0f172a;
-  border-radius: 8px;
-  color: #e2e8f0;
-  line-height: 1.6;
-}
-
 @media (max-width: 860px) {
   .mode-grid {
     grid-template-columns: 1fr;
   }
 
   .chat-header,
-  .draft-header,
-  .composer {
+  .composer,
+  .doctor-card {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .doctor-card {
+    display: flex;
   }
 
   .header-actions,

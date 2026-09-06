@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,11 +88,26 @@ class RagRetrievalClientTest {
         });
         server.start();
 
-        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-1", "run-1", "session-1", "step-1", null, "agent"))) {
+        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-1", "run-1", "session-1", "step-1", null, "agent", null, null, null))) {
             new RagRetrievalClient(properties(1000)).retrieve("胸痛", RagRetrievalClient.SCENE_PRE_INQUIRY);
         }
 
         assertThat(runHeader.get()).isEqualTo("run-1");
+    }
+
+    @Test
+    void retrieveWithMetadataKeepsTraceMetaForAgentTrace() throws Exception {
+        startServer(0, """
+                {"success":true,"query":"q","expanded_query":"expanded","doc_type_counts":{"red_flag":1},"used_query_expansion":true,"chunks":[{"chunk_id":"c1","doc_id":"d1","doc_type":"red_flag","title":"胸痛红旗","score":0.9,"final_score":1.1,"chunk_text":"胸痛伴大汗"}],"trace_meta":{"trace_id":"trace-1","run_id":"run-1","step_id":"step-1","hybrid_retrieval":{"retrieval_mode":"hybrid_rerank","latency":{"total_ms":12}}},"error_message":null}
+                """);
+
+        RagRetrievalResult result = new RagRetrievalClient(properties(1000)).retrieveWithMetadata("胸痛", RagRetrievalClient.SCENE_PRE_INQUIRY);
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.expandedQuery()).isEqualTo("expanded");
+        assertThat(result.docTypeCounts()).containsEntry("red_flag", 1);
+        assertThat(result.traceMeta()).containsEntry("trace_id", "trace-1");
+        assertThat(result.traceMeta().get("hybrid_retrieval")).isInstanceOf(Map.class);
     }
 
     private RagProperties properties(int timeoutMs) {

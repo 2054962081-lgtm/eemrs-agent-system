@@ -13,6 +13,7 @@ class TracePayloadsTest {
     void truncatesAndRedactsPayloads() {
         TraceProperties properties = new TraceProperties();
         properties.setPayloadEnabled(true);
+        properties.setContentCaptureLevel(TraceContentCaptureLevel.REDACTED_TEXT);
         properties.setPayloadMaxLength(20);
         properties.setSummaryMaxLength(40);
         TracePayloads payloads = new TracePayloads(new ObjectMapper(), properties, new TraceRedactor());

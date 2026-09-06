@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS agent_step (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_agent_step_step_id (step_id),
+    UNIQUE KEY uk_agent_step_run_sequence (run_id, sequence_no),
     KEY idx_agent_step_run_id (run_id),
     KEY idx_agent_step_run_sequence (run_id, sequence_no),
     KEY idx_agent_step_parent_step_id (parent_step_id),

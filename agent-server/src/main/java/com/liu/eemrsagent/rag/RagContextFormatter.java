@@ -21,18 +21,27 @@ public class RagContextFormatter {
     );
 
     public String format(List<RagChunk> chunks, int maxContextChars) {
+        return formatWithTrace(chunks, maxContextChars).context();
+    }
+
+    public FormattedContext formatWithTrace(List<RagChunk> chunks, int maxContextChars) {
         if (chunks == null || chunks.isEmpty() || maxContextChars <= 0) {
-            return "";
+            return new FormattedContext("", List.of(), List.of(), List.of(), "empty_or_disabled");
         }
         Map<String, RagChunk> unique = new LinkedHashMap<>();
+        List<String> duplicateChunkIds = new java.util.ArrayList<>();
         for (RagChunk chunk : chunks) {
             if (chunk == null || chunk.chunkId() == null || chunk.chunkId().isBlank()) {
                 continue;
             }
-            unique.putIfAbsent(chunk.chunkId(), chunk);
+            if (unique.containsKey(chunk.chunkId())) {
+                duplicateChunkIds.add(chunk.chunkId());
+            } else {
+                unique.put(chunk.chunkId(), chunk);
+            }
         }
         if (unique.isEmpty()) {
-            return "";
+            return new FormattedContext("", List.of(), duplicateChunkIds, List.of(), "no_valid_chunk_id");
         }
 
         List<RagChunk> ordered = unique.values().stream()
@@ -44,6 +53,8 @@ public class RagContextFormatter {
         StringBuilder builder = new StringBuilder();
         builder.append("【RAG 检索知识】仅用于辅助预问诊、分诊和病历摘要，不代表最终诊断。\n");
         int index = 1;
+        List<String> finalChunkOrder = new java.util.ArrayList<>();
+        List<String> droppedChunkIds = new java.util.ArrayList<>();
         for (RagChunk chunk : ordered) {
             String item = """
                     %d. 标题：%s
@@ -61,12 +72,19 @@ public class RagContextFormatter {
                     truncate(safe(chunk.chunkText()), CHUNK_TEXT_LIMIT)
             );
             if (builder.length() + item.length() > maxContextChars) {
+                droppedChunkIds.add(chunk.chunkId());
                 break;
             }
             builder.append(item);
+            finalChunkOrder.add(chunk.chunkId());
             index++;
         }
-        return index == 1 ? "" : builder.toString().trim();
+        if (index == 1) {
+            droppedChunkIds.addAll(ordered.stream().map(RagChunk::chunkId).toList());
+            return new FormattedContext("", List.of(), duplicateChunkIds, droppedChunkIds, "max_context_chars");
+        }
+        return new FormattedContext(builder.toString().trim(), finalChunkOrder, duplicateChunkIds, droppedChunkIds,
+                droppedChunkIds.isEmpty() ? "none" : "max_context_chars");
     }
 
     private String safe(String value) {
@@ -78,5 +96,14 @@ public class RagContextFormatter {
             return value;
         }
         return value.substring(0, maxLength) + "...";
+    }
+
+    public record FormattedContext(
+            String context,
+            List<String> finalContextChunkOrder,
+            List<String> duplicateChunkIds,
+            List<String> droppedChunkIds,
+            String dropReason
+    ) {
     }
 }

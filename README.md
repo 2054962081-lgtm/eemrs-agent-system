@@ -9,9 +9,9 @@ eemrs-agent-system/
 ├── frontend-vue/          # Vue 前端
 ├── eemrs-server-master/   # 核心业务后端
 ├── agent-server/          # AI Agent 后端
-├── rag/                   # RAG 检索服务
-├── rag_knowledge/         # 医疗知识库
-├── portfolio.html         # 项目作品集
+│   ├── rag/               # RAG 检索服务
+│   └── rag_knowledge/     # 医疗知识库
+├── index.html             # 项目作品集
 └── README.md
 ```
 

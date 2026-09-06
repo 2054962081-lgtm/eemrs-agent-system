@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EEMRS doctor_draft case",
+  "type": "object",
+  "required": [
+    "metadata",
+    "input",
+    "ground_truth",
+    "source_reference"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": [
+        "case_id",
+        "dataset_version",
+        "case_version",
+        "split",
+        "source_type",
+        "annotator",
+        "reviewer",
+        "review_status",
+        "annotation_confidence",
+        "created_at",
+        "updated_at",
+        "change_note"
+      ],
+      "properties": {
+        "dataset_version": {
+          "const": "EEMRS-Eval-v1.0"
+        },
+        "split": {
+          "enum": [
+            "DEV",
+            "HOLDOUT"
+          ]
+        },
+        "source_type": {
+          "enum": [
+            "KB_DERIVED",
+            "RULE_BASED_SYNTHETIC",
+            "SYSTEM_BAD_CASE",
+            "USER_TEST",
+            "EXPERT_AUTHORED"
+          ]
+        },
+        "review_status": {
+          "enum": [
+            "NEEDS_MEDICAL_REVIEW",
+            "REVIEWED_INTERNAL",
+            "EXPERT_REVIEWED"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

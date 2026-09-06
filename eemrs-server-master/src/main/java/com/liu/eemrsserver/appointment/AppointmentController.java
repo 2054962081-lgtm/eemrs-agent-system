@@ -1,6 +1,8 @@
 package com.liu.eemrsserver.appointment;
 
 import com.liu.eemrsserver.appointment.dto.AcceptAppointmentResponse;
+import com.liu.eemrsserver.appointment.dto.AgentAppointmentRequest;
+import com.liu.eemrsserver.appointment.dto.AgentAppointmentResponse;
 import com.liu.eemrsserver.appointment.dto.CreateAppointmentRequest;
 import com.liu.eemrsserver.common.ApiResponse;
 import com.liu.eemrsserver.security.CurrentUser;
@@ -22,6 +24,12 @@ public class AppointmentController {
     public ApiResponse<Boolean> create(@RequestBody CreateAppointmentRequest request,
                                        @CurrentUser UserPrincipal currentUser) {
         return ApiResponse.ok("appointment handled", appointmentServiceAdapter.create(request, currentUser));
+    }
+
+    @PostMapping("/agent")
+    public ApiResponse<AgentAppointmentResponse> createByAgent(@RequestBody AgentAppointmentRequest request,
+                                                               @CurrentUser UserPrincipal currentUser) {
+        return ApiResponse.ok("agent appointment handled", appointmentServiceAdapter.createByAgent(request, currentUser));
     }
 
     @PostMapping("/{idNumber}/accept")

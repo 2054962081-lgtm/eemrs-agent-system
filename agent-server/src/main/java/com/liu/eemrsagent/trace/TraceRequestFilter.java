@@ -19,6 +19,10 @@ public class TraceRequestFilter extends OncePerRequestFilter {
                 request.getHeader(TraceHeaders.TRACE_ID),
                 request.getHeader(TraceHeaders.RUN_ID),
                 request.getHeader(TraceHeaders.SESSION_ID)
+        ).withEvalCorrelation(
+                request.getHeader(TraceHeaders.EVAL_RUN_ID),
+                request.getHeader(TraceHeaders.EVAL_CASE_ID),
+                request.getHeader(TraceHeaders.REQUEST_ID)
         );
         try (TraceContext.Scope ignored = TraceContext.open(state)) {
             response.setHeader(TraceHeaders.TRACE_ID, state.traceId());

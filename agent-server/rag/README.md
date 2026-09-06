@@ -46,6 +46,8 @@ D:\medical-rag-docker\milvus\volumes\milvus
 
 ## 安装依赖
 
+以下命令默认从仓库的 `agent-server` 目录执行：
+
 ```bash
 pip install -r requirements-rag.txt
 ```

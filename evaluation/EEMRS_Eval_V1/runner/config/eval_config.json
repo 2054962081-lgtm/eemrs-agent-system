@@ -1,0 +1,35 @@
+{
+  "default_split": "dev",
+  "agent_base_url": "http://localhost:8081",
+  "trace_base_url": "http://localhost:8081",
+  "rag_base_url": "http://127.0.0.1:18080",
+  "rag_health_path": "/memory/health",
+  "timeout_seconds": 30,
+  "task_timeouts_seconds": {
+    "report": 60,
+    "consultation": 60,
+    "safety": 60,
+    "doctor_draft": 60
+  },
+  "trace_timeout_seconds": 10,
+  "trace_poll_interval_ms": 300,
+  "fixture_timeout_seconds": 10,
+  "preflight_enabled": true,
+  "report_fixture_enabled": true,
+  "dependency_map": {
+    "consultation": ["agent_server", "rag_service"],
+    "safety": ["agent_server", "rag_service"],
+    "report": ["agent_server", "report_fixture"],
+    "doctor_draft": ["agent_server"]
+  },
+  "max_turns": 8,
+  "agent_mode": "http",
+  "model_name": "UNKNOWN",
+  "model_version": "UNKNOWN",
+  "prompt_version": "UNKNOWN",
+  "kb_version": "medical-rag-v1",
+  "embedding_model": "UNKNOWN",
+  "retrieval_config": "UNKNOWN",
+  "temperature": "UNKNOWN",
+  "max_tokens": "UNKNOWN"
+}

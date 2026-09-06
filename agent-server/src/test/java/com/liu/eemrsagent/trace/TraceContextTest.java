@@ -15,7 +15,7 @@ class TraceContextTest {
 
     @Test
     void opensAndClearsMdcContext() {
-        TraceContext.State state = new TraceContext.State("trace-1", "run-1", "session-1", "step-1", "user", "agent");
+        TraceContext.State state = new TraceContext.State("trace-1", "run-1", "session-1", "step-1", "user", "agent", null, null, null);
 
         try (TraceContext.Scope ignored = TraceContext.open(state)) {
             assertThat(TraceContext.current()).contains(state);
@@ -31,10 +31,10 @@ class TraceContextTest {
 
     @Test
     void scopesDoNotLeakBetweenRequests() {
-        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-a", "run-a", null, null, null, "agent"))) {
+        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-a", "run-a", null, null, null, "agent", null, null, null))) {
             assertThat(TraceContext.current().orElseThrow().traceId()).isEqualTo("trace-a");
         }
-        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-b", "run-b", null, null, null, "agent"))) {
+        try (TraceContext.Scope ignored = TraceContext.open(new TraceContext.State("trace-b", "run-b", null, null, null, "agent", null, null, null))) {
             assertThat(TraceContext.current().orElseThrow().traceId()).isEqualTo("trace-b");
         }
     }
