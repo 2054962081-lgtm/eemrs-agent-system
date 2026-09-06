@@ -2,6 +2,7 @@ package com.liu.eemrsagent.reporttrend;
 
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,9 +28,12 @@ public class CloudPayloadBuilder {
                 .map(this::indicatorPayload)
                 .distinct()
                 .toList());
-        payload.put("trend_results", trendItems);
+        payload.put("trend_results", trendItems.stream()
+                .map(this::trendPayload)
+                .toList());
         payload.put("abnormal_summary", trendItems.stream()
                 .filter(item -> item.latestAbnormalFlag() == AbnormalFlag.HIGH || item.latestAbnormalFlag() == AbnormalFlag.LOW)
+                .map(this::trendPayload)
                 .toList());
         payload.put("symptom_context_summary", context.symptomContextSummary());
         payload.put("health_context_summary", context.healthContextSummary());
@@ -44,10 +48,42 @@ public class CloudPayloadBuilder {
     private Map<String, Object> indicatorPayload(LabIndicatorItem item) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("code", item.standardCode());
-        out.put("name", item.standardName());
+        out.put("indicator_name", item.standardName());
         out.put("unit", item.unit());
-        out.put("referenceLow", item.referenceLow());
-        out.put("referenceHigh", item.referenceHigh());
+        out.put("reference_low", item.referenceLow());
+        out.put("reference_high", item.referenceHigh());
         return out;
+    }
+
+    private Map<String, Object> trendPayload(TrendItem item) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("code", item.code());
+        out.put("indicator_name", item.name());
+        out.put("unit", item.unit());
+        out.put("point_count", item.pointCount());
+        out.put("first_date", dateText(item.firstDate()));
+        out.put("latest_date", dateText(item.latestDate()));
+        out.put("first_value", item.firstValue());
+        out.put("latest_value", item.latestValue());
+        out.put("previous_value", item.previousValue());
+        out.put("min_value", item.minValue());
+        out.put("max_value", item.maxValue());
+        out.put("change_absolute", item.changeAbsolute());
+        out.put("change_percent", item.changePercent());
+        out.put("trend_direction", enumName(item.trendDirection()));
+        out.put("latest_abnormal_flag", enumName(item.latestAbnormalFlag()));
+        out.put("abnormal_count", item.abnormalCount());
+        out.put("consecutive_abnormal_count", item.consecutiveAbnormalCount());
+        out.put("first_abnormal_date", dateText(item.firstAbnormalDate()));
+        out.put("latest_abnormal_date", dateText(item.latestAbnormalDate()));
+        return out;
+    }
+
+    private String enumName(Enum<?> value) {
+        return value == null ? null : value.name();
+    }
+
+    private String dateText(LocalDate value) {
+        return value == null ? null : value.toString();
     }
 }

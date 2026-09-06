@@ -36,17 +36,24 @@ public class TrendAnalysisService {
                 continue;
             }
             Point latest = points.get(points.size() - 1);
+            Point first = points.get(0);
             Point previous = points.size() > 1 ? points.get(points.size() - 2) : null;
+            BigDecimal firstValue = first.item().value();
             BigDecimal latestValue = latest.item().value();
             BigDecimal previousValue = previous == null ? null : previous.item().value();
             BigDecimal min = points.stream().map(point -> point.item().value()).min(BigDecimal::compareTo).orElse(latestValue);
             BigDecimal max = points.stream().map(point -> point.item().value()).max(BigDecimal::compareTo).orElse(latestValue);
-            BigDecimal changeAbs = previousValue == null ? null : latestValue.subtract(previousValue);
-            BigDecimal changePercent = percent(changeAbs, previousValue);
+            BigDecimal changeAbs = points.size() < 2 ? null : latestValue.subtract(firstValue);
+            BigDecimal changePercent = percent(changeAbs, firstValue);
             AbnormalSpan abnormalSpan = abnormalSpan(points);
             results.add(new TrendItem(
                     latest.item().standardCode(),
                     latest.item().standardName(),
+                    latest.item().unit(),
+                    points.size(),
+                    first.date(),
+                    latest.date(),
+                    firstValue,
                     latestValue,
                     previousValue,
                     min,

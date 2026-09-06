@@ -19,8 +19,14 @@ public record ReportTrendAnalysisResponse(
         String errorMessage
 ) {
     public static ReportTrendAnalysisResponse fail(String analysisId, String traceRunId, ReportTrendErrorCode errorCode, String message) {
+        return fail(analysisId, traceRunId, errorCode, message, List.of());
+    }
+
+    public static ReportTrendAnalysisResponse fail(String analysisId, String traceRunId, ReportTrendErrorCode errorCode,
+                                                   String message, List<TrendItem> trendItems) {
         return new ReportTrendAnalysisResponse(
-                analysisId, traceRunId, "FAILED", "", "", "", List.of(), List.of(), List.of(), List.of(),
+                analysisId, traceRunId, trendItems == null || trendItems.isEmpty() ? "FAILED" : "PARTIAL_SUCCESS",
+                "", "", "", List.of(), List.of(), trendItems == null ? List.of() : trendItems, List.of(),
                 new Recommendation("", ""), new ContextUsed(false, false, false), errorCode.name(), message
         );
     }

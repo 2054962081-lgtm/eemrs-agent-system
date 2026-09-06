@@ -7,9 +7,10 @@ public record RagRetrievalResult(
         List<RagChunk> chunks,
         String expandedQuery,
         Map<String, Integer> docTypeCounts,
-        boolean usedQueryExpansion
+        boolean usedQueryExpansion,
+        Map<String, Object> traceMeta
 ) {
     public static RagRetrievalResult empty() {
-        return new RagRetrievalResult(List.of(), "", Map.of(), false);
+        return new RagRetrievalResult(List.of(), "", Map.of(), false, Map.of());
     }
 }

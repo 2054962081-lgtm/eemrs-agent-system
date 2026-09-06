@@ -3,12 +3,14 @@ package com.liu.eemrsagent.trace;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.dao.DataAccessException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Repository
 public class JdbcTraceRepository implements TraceRepository {
@@ -146,6 +148,37 @@ public class JdbcTraceRepository implements TraceRepository {
     }
 
     @Override
+    public AgentRunRecord findLatestRunByRequestId(String requestId) {
+        List<AgentRunRecord> runs = findRunsByRequestId(requestId);
+        return runs.isEmpty() ? null : runs.get(runs.size() - 1);
+    }
+
+    @Override
+    public List<AgentRunRecord> findRunsByRequestId(String requestId) {
+        String select = """
+                SELECT id, schema_version, trace_id, run_id, session_id, user_id_hash, agent_name, request_type,
+                       prompt_version, rag_version, model_name, status, started_at, ended_at, total_latency_ms,
+                       prompt_tokens, completion_tokens, total_tokens, estimated_cost, cost_currency, cost_config_version,
+                       final_output_summary, error_code, error_message, metadata_json, created_at, updated_at
+                FROM agent_run
+                """;
+        try {
+            return jdbcTemplate.query(select + """
+                WHERE JSON_UNQUOTE(JSON_EXTRACT(metadata_json, '$.request_id')) = ?
+                ORDER BY created_at ASC
+                """, runMapper(), requestId);
+        } catch (DataAccessException e) {
+            return jdbcTemplate.query(select + """
+                WHERE metadata_json LIKE ?
+                ORDER BY created_at ASC
+                """, runMapper(), "%" + escapeLike(requestId) + "%")
+                    .stream()
+                    .filter(run -> metadataMatchesRequestId(run.metadataJson(), requestId))
+                    .toList();
+        }
+    }
+
+    @Override
     public List<AgentStepRecord> findSteps(String runId) {
         return jdbcTemplate.query("""
                 SELECT * FROM agent_step WHERE run_id = ? ORDER BY sequence_no ASC
@@ -163,6 +196,23 @@ public class JdbcTraceRepository implements TraceRepository {
         if (value != null && !value.isBlank()) {
             sql.append(" AND ").append(column).append(" = ?");
             args.add(value);
+        }
+    }
+
+    private String escapeLike(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    private boolean metadataMatchesRequestId(String metadataJson, String requestId) {
+        if (metadataJson == null || requestId == null || requestId.isBlank()) {
+            return false;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(metadataJson);
+            return Objects.equals(requestId, json.path("request_id").asText(null));
+        } catch (Exception ignored) {
+            return metadataJson.contains("\"request_id\":\"" + requestId + "\"")
+                    || metadataJson.contains("\"request_id\": \"" + requestId + "\"");
         }
     }
 

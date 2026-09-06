@@ -9,6 +9,7 @@ import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPrivateKey;
 import org.bouncycastle.pqc.math.linearalgebra.ByteUtils;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.zz.gmhelper.BCECUtil;
 import org.zz.gmhelper.SM2Util;
@@ -28,6 +29,7 @@ public class TestGM {
     public static final byte[] WITH_ID = new byte[]{1, 2, 3, 4};
 
     @Test
+    @Ignore("Destructive: rewrites server SM2 key files used by encrypted login data")
     public void testGenSM2KeyToFile() {
         Map<String, byte[]> keyPair = OperateKey.getSM2Key();
         try {
@@ -45,6 +47,7 @@ public class TestGM {
         }
 
     @Test
+    @Ignore("Destructive: rewrites server SM2/SM4/OPE key files used by encrypted login data")
     public void testGenServerKey() {
         try {
             Map<String, byte[]> keyPair = OperateKey.getSM2Key();

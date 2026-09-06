@@ -7,6 +7,13 @@ const request = axios.create({
   timeout: 15000,
 })
 
+const traceHeaderNames = [
+  'x-agent-trace-id',
+  'x-agent-run-id',
+  'x-agent-step-id',
+  'x-agent-session-id',
+] as const
+
 request.interceptors.request.use((config) => {
   const raw = localStorage.getItem('eemrs-auth')
   if (raw) {
@@ -15,11 +22,31 @@ request.interceptors.request.use((config) => {
       config.headers.Authorization = `${auth.tokenType || 'Bearer'} ${auth.token}`
     }
   }
+  const traceHeadersRaw = sessionStorage.getItem('eemrs-agent-trace')
+  if (traceHeadersRaw) {
+    const traceHeaders = JSON.parse(traceHeadersRaw) as Record<string, string>
+    traceHeaderNames.forEach((name) => {
+      const value = traceHeaders[name]
+      if (value) {
+        config.headers[name] = value
+      }
+    })
+  }
   return config
 })
 
 request.interceptors.response.use(
   (response) => {
+    const nextTraceHeaders: Record<string, string> = {}
+    traceHeaderNames.forEach((name) => {
+      const value = response.headers[name]
+      if (typeof value === 'string' && value.trim()) {
+        nextTraceHeaders[name] = value.trim()
+      }
+    })
+    if (Object.keys(nextTraceHeaders).length) {
+      sessionStorage.setItem('eemrs-agent-trace', JSON.stringify(nextTraceHeaders))
+    }
     const body = response.data as ApiResponse<unknown>
     if (body && typeof body.success === 'boolean') {
       if (!body.success) {

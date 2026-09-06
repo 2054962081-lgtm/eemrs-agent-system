@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.liu.eemrsagent.security.AgentRole;
 import com.liu.eemrsagent.security.AgentUserPrincipal;
 import com.liu.eemrsagent.security.ForbiddenException;
+import com.liu.eemrsagent.trace.NoopTraceRecorder;
+import com.liu.eemrsagent.trace.TraceRedactor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +32,7 @@ class MedicalRecordDraftServiceReviewTest {
     void setUp() {
         repository = mock(MedicalRecordDraftRepository.class);
         coreClient = mock(CoreMedicalRecordClient.class);
-        service = new MedicalRecordDraftService(null, objectMapper, repository, null, null, null, null, coreClient);
+        service = new MedicalRecordDraftService(null, objectMapper, repository, null, null, null, null, coreClient, new NoopTraceRecorder(), new TraceRedactor());
         doctor = new AgentUserPrincipal("D001", "doctor", AgentRole.DOCTOR, "内科");
         patient = new AgentUserPrincipal("P001", "patient", AgentRole.PATIENT, null);
     }

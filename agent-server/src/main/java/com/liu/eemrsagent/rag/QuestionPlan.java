@@ -12,10 +12,33 @@ public record QuestionPlan(
         List<String> expectedResponsePoints,
         List<String> doctorRecordFields,
         List<String> evidenceTitles,
-        List<String> sourceDocTypes
+        List<String> sourceDocTypes,
+        List<String> availableRedFlagRules,
+        List<String> activatedRedFlags,
+        List<String> inactiveRedFlags,
+        List<String> activationEvidence,
+        String riskDecisionReason,
+        String departmentDecisionReason
 ) {
     public static QuestionPlan empty() {
-        return new QuestionPlan("", List.of(), "", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new QuestionPlan(
+                "",
+                List.of(),
+                "",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                "",
+                ""
+        );
     }
 
     public boolean hasContent() {

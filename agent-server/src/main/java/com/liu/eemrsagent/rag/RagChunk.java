@@ -19,6 +19,9 @@ public record RagChunk(
         @JsonProperty("expected_response_points") List<String> expectedResponsePoints,
         @JsonProperty("doctor_record_fields") List<String> doctorRecordFields,
         Double score,
+        @JsonProperty("final_score") Double finalScore,
+        @JsonProperty("topic_alignment") String topicAlignment,
+        @JsonProperty("selection_reason") String selectionReason,
         @JsonProperty("chunk_text") String chunkText
 ) {
     public RagChunk(
@@ -46,6 +49,48 @@ public record RagChunk(
                 List.of(),
                 List.of(),
                 score,
+                null,
+                null,
+                null,
+                chunkText
+        );
+    }
+
+    public RagChunk(
+            String chunkId,
+            String docId,
+            String docType,
+            String title,
+            String urgencyLevel,
+            String relatedDepartments,
+            String applicablePopulation,
+            String relatedSymptoms,
+            List<String> mustAsk,
+            List<String> redFlags,
+            List<String> forbiddenActions,
+            List<String> expectedResponsePoints,
+            List<String> doctorRecordFields,
+            Double score,
+            String chunkText
+    ) {
+        this(
+                chunkId,
+                docId,
+                docType,
+                title,
+                urgencyLevel,
+                relatedDepartments,
+                applicablePopulation,
+                relatedSymptoms,
+                mustAsk,
+                redFlags,
+                forbiddenActions,
+                expectedResponsePoints,
+                doctorRecordFields,
+                score,
+                null,
+                null,
+                null,
                 chunkText
         );
     }

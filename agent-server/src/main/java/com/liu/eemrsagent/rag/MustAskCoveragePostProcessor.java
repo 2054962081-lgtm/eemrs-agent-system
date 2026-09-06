@@ -3,6 +3,7 @@ package com.liu.eemrsagent.rag;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 @Component
@@ -15,23 +16,40 @@ public class MustAskCoveragePostProcessor {
     }
 
     public PostProcessResult process(String reply, QuestionPlan plan) {
+        return process(reply, plan, List.of());
+    }
+
+    public PostProcessResult process(String reply, QuestionPlan plan, List<String> runtimeRequiredQuestions) {
         String safeReply = reply == null ? "" : reply;
-        if (!properties.getPostProcess().isEnabled() || plan == null || plan.keyQuestions().isEmpty()) {
-            double coverage = coverage(safeReply, plan == null ? List.of() : plan.keyQuestions());
+        List<String> planQuestions = plan == null ? List.of() : plan.keyQuestions();
+        List<String> runtimeQuestions = runtimeRequiredQuestions == null ? List.of() : runtimeRequiredQuestions;
+        if (!properties.getPostProcess().isEnabled()) {
+            double coverage = coverage(safeReply, planQuestions);
             return new PostProcessResult(safeReply, coverage, coverage, 0, List.of(), false);
         }
 
-        List<String> missing = missingQuestions(safeReply, plan.keyQuestions());
-        double before = ratio(plan.keyQuestions().size() - missing.size(), plan.keyQuestions().size());
-        if (before >= properties.getQuestionPlan().getMustAskTargetCoverage() || missing.isEmpty()) {
+        List<String> missing = missingQuestions(safeReply, planQuestions);
+        double before = ratio(planQuestions.size() - missing.size(), planQuestions.size());
+        List<String> missingRuntime = missingQuestions(safeReply, runtimeQuestions);
+        if ((before >= properties.getQuestionPlan().getMustAskTargetCoverage() || missing.isEmpty()) && missingRuntime.isEmpty()) {
             return new PostProcessResult(safeReply, before, before, 0, List.of(), true);
         }
 
         int max = Math.max(0, properties.getPostProcess().getMaxAddedQuestions());
-        List<String> added = missing.stream().limit(max).toList();
+        List<String> added = combineRuntimeFirst(missingRuntime, missing, max);
         String finalReply = appendQuestions(safeReply, plan, added);
-        double after = coverage(finalReply, plan.keyQuestions());
+        double after = coverage(finalReply, planQuestions);
         return new PostProcessResult(finalReply, before, after, added.size(), added, true);
+    }
+
+    private List<String> combineRuntimeFirst(List<String> runtimeQuestions, List<String> planQuestions, int max) {
+        if (max <= 0) {
+            return List.of();
+        }
+        LinkedHashSet<String> combined = new LinkedHashSet<>();
+        combined.addAll(runtimeQuestions == null ? List.of() : runtimeQuestions);
+        combined.addAll(planQuestions == null ? List.of() : planQuestions);
+        return combined.stream().limit(max).toList();
     }
 
     private String appendQuestions(String reply, QuestionPlan plan, List<String> questions) {
@@ -53,6 +71,9 @@ public class MustAskCoveragePostProcessor {
     }
 
     private boolean isEmergency(QuestionPlan plan) {
+        if (plan == null) {
+            return false;
+        }
         String text = (plan.riskLevel() + " " + plan.urgencyLevel() + " " + String.join(" ", plan.redFlags())).toLowerCase();
         return text.contains("high") || text.contains("120") || text.contains("急诊") || text.contains("立即") || text.contains("危");
     }

@@ -20,16 +20,16 @@ def main() -> int:
     milvus.connect()
 
     if milvus.has_collection() and not args.yes:
-        answer = input(f"纭鍒犻櫎骞堕噸寤?collection {args.collection}? 杈撳叆 yes 缁х画: ")
+        answer = input(f"确认删除并重建 collection {args.collection}? 输入 yes 继续: ")
         if answer.strip().lower() != "yes":
-            print("宸插彇娑堛€?)
+            print("已取消。")
             return 1
 
     milvus.drop_collection()
     milvus.create_collection(provider.embedding_dim)
     print(f"Collection recreated: {args.collection}")
     print(f"embedding_dim: {provider.embedding_dim}")
-    print("Milvus 鏁版嵁瀹為檯钀界洏浣嶇疆鍙栧喅浜?docker-compose.yml 鐨?volumes 閰嶇疆銆?)
+    print("Milvus 数据实际落盘位置取决于 docker-compose.yml 的 volumes 配置。")
     return 0
 
 

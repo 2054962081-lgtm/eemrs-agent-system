@@ -18,11 +18,16 @@ public class TracePayloads {
     }
 
     public String summary(Object value) {
+        if (properties.getContentCaptureLevel() == TraceContentCaptureLevel.METADATA_ONLY && value instanceof String text) {
+            return "{\"text_length\":" + text.length() + ",\"text_hash\":\"" + redactor.stableHash(text) + "\"}";
+        }
         return truncate(redactor.redact(toText(value)), properties.getSummaryMaxLength());
     }
 
     public String payload(Object value) {
-        if (!properties.isPayloadEnabled() || value == null) {
+        if (!properties.isPayloadEnabled()
+                || properties.getContentCaptureLevel() != TraceContentCaptureLevel.REDACTED_TEXT
+                || value == null) {
             return null;
         }
         return truncate(redactor.redact(toJson(value)), properties.getPayloadMaxLength());

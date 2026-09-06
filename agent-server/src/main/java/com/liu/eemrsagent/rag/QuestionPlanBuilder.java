@@ -27,6 +27,14 @@ public class QuestionPlanBuilder {
             "medical_record_template"
     );
     private static final Pattern SPLIT_PATTERN = Pattern.compile("[,，;；、/\\s]+");
+    private static final List<RulePattern> RED_FLAG_PATTERNS = List.of(
+            new RulePattern("GI bleeding", List.of("消化道出血", "呕血", "黑便", "便血"), List.of("呕血", "黑便", "便血", "大量出血", "头晕心慌", "晕厥", "出冷汗"), List.of("无呕血", "无黑便", "无便血", "没有呕血", "没有黑便", "没有便血", "否认呕血", "否认黑便", "否认便血")),
+            new RulePattern("Pregnancy red flag", List.of("孕", "孕产妇", "胎动", "阴道出血"), List.of("怀孕", "孕妇", "孕周", "孕期", "产后", "阴道出血", "胎动减少", "流液"), List.of("男性", "男", "未孕", "没有怀孕", "否认怀孕", "非孕")),
+            new RulePattern("Chest pain red flag", List.of("胸痛", "胸闷", "冠心病"), List.of("胸痛", "胸闷", "大汗", "冒汗", "出汗", "放射痛", "气短", "恶心", "持续不缓解"), List.of("无胸痛", "没有胸痛", "否认胸痛", "无胸闷", "没有胸闷", "否认胸闷")),
+            new RulePattern("Dyspnea red flag", List.of("呼吸困难", "气短", "喘", "咯血"), List.of("呼吸困难", "喘得厉害", "说话费劲", "口唇发紫", "血氧低", "咯血"), List.of("无呼吸困难", "没有呼吸困难", "否认呼吸困难", "无气短", "没有气短")),
+            new RulePattern("Fever red flag", List.of("发热", "高热", "寒战", "免疫"), List.of("高热", "40度", "意识模糊", "寒战", "化疗后发热", "免疫低下"), List.of("无发热", "没有发热", "否认发热", "不发烧", "没发烧")),
+            new RulePattern("Severe abdominal pain", List.of("腹痛", "腹肌紧张", "剧烈持续腹痛"), List.of("剧烈腹痛", "剧烈持续腹痛", "腹肌紧张", "板状腹", "休克", "晕厥"), List.of("中等疼痛", "轻微腹痛", "无腹肌紧张", "没有腹肌紧张", "否认明显伴随症状"))
+    );
 
     private final RagProperties properties;
 
@@ -54,14 +62,14 @@ public class QuestionPlanBuilder {
                 .toList();
 
         LinkedHashSet<String> keyQuestions = new LinkedHashSet<>();
-        LinkedHashSet<String> redFlags = new LinkedHashSet<>();
+        LinkedHashSet<String> availableRedFlagRules = new LinkedHashSet<>();
         LinkedHashSet<String> forbiddenActions = new LinkedHashSet<>();
         LinkedHashSet<String> expectedResponsePoints = new LinkedHashSet<>();
         LinkedHashSet<String> doctorRecordFields = new LinkedHashSet<>();
-        LinkedHashSet<String> departments = new LinkedHashSet<>();
+        LinkedHashSet<String> departmentCandidates = new LinkedHashSet<>();
         LinkedHashSet<String> titles = new LinkedHashSet<>();
         LinkedHashSet<String> docTypes = new LinkedHashSet<>();
-        String urgency = "";
+        String nonRuleUrgency = "";
 
         addAll(keyQuestions, scenarioQuestions(userInput), maxQuestions);
 
@@ -76,30 +84,39 @@ public class QuestionPlanBuilder {
         }
 
         for (RagChunk chunk : ordered) {
-            addAll(redFlags, chunk.redFlags(), 12);
+            addAll(availableRedFlagRules, chunk.redFlags(), 12);
             addAll(forbiddenActions, chunk.forbiddenActions(), 12);
             addAll(expectedResponsePoints, chunk.expectedResponsePoints(), 12);
             addAll(doctorRecordFields, chunk.doctorRecordFields(), 12);
-            splitAndAdd(departments, chunk.relatedDepartments(), 8);
+            splitAndAdd(departmentCandidates, chunk.relatedDepartments(), 12);
             addIfPresent(titles, chunk.title(), 8);
             addIfPresent(docTypes, chunk.docType(), 8);
-            if (urgency.isBlank() && chunk.urgencyLevel() != null && !chunk.urgencyLevel().isBlank()) {
-                urgency = chunk.urgencyLevel().trim();
+            if (!"red_flag".equals(chunk.docType()) && nonRuleUrgency.isBlank() && chunk.urgencyLevel() != null && !chunk.urgencyLevel().isBlank()) {
+                nonRuleUrgency = chunk.urgencyLevel().trim();
             }
         }
 
-        String riskLevel = inferRiskLevel(urgency, redFlags);
+        RedFlagDecision redFlagDecision = decideRedFlags(userInput, chunks, availableRedFlagRules);
+        String urgency = inferUrgency(nonRuleUrgency, redFlagDecision);
+        String riskLevel = inferRiskLevel(urgency, redFlagDecision.activatedRedFlags());
+        DepartmentDecision departmentDecision = decideDepartments(userInput, departmentCandidates, chunks, redFlagDecision);
         return new QuestionPlan(
                 riskLevel,
-                List.copyOf(departments),
+                departmentDecision.departments(),
                 urgency,
                 List.copyOf(keyQuestions),
-                List.copyOf(redFlags),
+                redFlagDecision.activatedRedFlags(),
                 List.copyOf(forbiddenActions),
                 List.copyOf(expectedResponsePoints),
                 List.copyOf(doctorRecordFields),
                 List.copyOf(titles),
-                List.copyOf(docTypes)
+                List.copyOf(docTypes),
+                List.copyOf(availableRedFlagRules),
+                redFlagDecision.activatedRedFlags(),
+                redFlagDecision.inactiveRedFlags(),
+                redFlagDecision.activationEvidence(),
+                redFlagDecision.reason(),
+                departmentDecision.reason()
         );
     }
 
@@ -164,15 +181,198 @@ public class QuestionPlanBuilder {
         return false;
     }
 
-    private String inferRiskLevel(String urgency, Set<String> redFlags) {
-        String text = (urgency == null ? "" : urgency) + " " + String.join(" ", redFlags);
-        if (text.contains("120") || text.contains("emergency") || text.contains("急诊") || text.contains("立即")) {
+    private RedFlagDecision decideRedFlags(String userInput, List<RagChunk> chunks, Set<String> availableRules) {
+        String patientText = userInput == null ? "" : userInput;
+        String ruleText = new StringBuilder()
+                .append(String.join(" ", availableRules))
+                .append(" ")
+                .append(chunks == null ? "" : chunks.stream()
+                        .filter(chunk -> chunk != null)
+                        .map(chunk -> String.join(" ", List.of(
+                                value(chunk.title()),
+                                value(chunk.chunkId()),
+                                value(chunk.docId()),
+                                value(chunk.relatedSymptoms()),
+                                value(chunk.applicablePopulation()))))
+                        .reduce("", (left, right) -> left + " " + right))
+                .toString();
+        LinkedHashSet<String> activated = new LinkedHashSet<>();
+        LinkedHashSet<String> inactive = new LinkedHashSet<>();
+        LinkedHashSet<String> evidence = new LinkedHashSet<>();
+        for (RulePattern pattern : RED_FLAG_PATTERNS) {
+            if (!pattern.matchesRule(ruleText)) {
+                continue;
+            }
+            if (pattern.hasNegativeEvidence(patientText)) {
+                inactive.add(pattern.name() + ": NEGATIVE_EVIDENCE");
+                evidence.add(pattern.name() + " negative evidence in patient state");
+                continue;
+            }
+            if (pattern.hasPositiveEvidence(patientText)) {
+                activated.add(pattern.name());
+                evidence.add(pattern.name() + " positive evidence in patient state");
+            } else {
+                inactive.add(pattern.name() + ": UNKNOWN");
+            }
+        }
+        String reason = activated.isEmpty()
+                ? "No patient-positive red flag evidence; available rules remain follow-up prompts."
+                : "Risk escalated by patient-positive red flag evidence: " + String.join("; ", activated);
+        return new RedFlagDecision(
+                List.copyOf(activated),
+                List.copyOf(inactive),
+                List.copyOf(evidence),
+                reason
+        );
+    }
+
+    private String inferUrgency(String nonRuleUrgency, RedFlagDecision redFlagDecision) {
+        if (!redFlagDecision.activatedRedFlags().isEmpty()) {
+            return "emergency";
+        }
+        String urgency = nonRuleUrgency == null ? "" : nonRuleUrgency.trim();
+        if (urgency.contains("立即") || urgency.contains("120") || urgency.contains("急诊")) {
+            return "urgent";
+        }
+        return urgency;
+    }
+
+    private String inferRiskLevel(String urgency, List<String> activatedRedFlags) {
+        if (!activatedRedFlags.isEmpty()) {
             return "high";
         }
+        String text = urgency == null ? "" : urgency;
         if (text.contains("urgent") || text.contains("尽快") || text.contains("高危")) {
             return "medium";
         }
-        return redFlags.isEmpty() ? "normal" : "medium";
+        return "normal";
+    }
+
+    private DepartmentDecision decideDepartments(
+            String userInput,
+            Set<String> departmentCandidates,
+            List<RagChunk> chunks,
+            RedFlagDecision redFlagDecision
+    ) {
+        String text = userInput == null ? "" : userInput;
+        boolean abdominal = containsAny(text, "腹痛", "肚子痛", "肚痛", "腹胀", "上腹痛", "下腹痛");
+        boolean urinary = containsAny(text, "尿频", "尿急", "尿痛", "血尿", "小便", "排尿", "腰痛");
+        boolean pregnancy = hasPregnancyEvidence(text);
+        boolean chest = containsAny(text, "胸痛", "胸闷", "大汗", "冒汗", "出汗", "放射痛");
+        boolean chemo = containsAny(text, "化疗", "肿瘤", "免疫低下", "免疫抑制");
+        boolean emergency = !redFlagDecision.activatedRedFlags().isEmpty();
+        LinkedHashSet<String> departments = new LinkedHashSet<>();
+        for (String department : departmentCandidates) {
+            if (departments.size() >= 6) {
+                break;
+            }
+            if (department == null || department.isBlank()) {
+                continue;
+            }
+            String normalized = department.trim();
+            if (emergency && normalized.equals("急诊科")) {
+                departments.add(normalized);
+                continue;
+            }
+            if (abdominal && (normalized.equals("消化内科") || normalized.equals("普外科") || normalized.equals("全科医学科"))) {
+                departments.add(normalized);
+                continue;
+            }
+            if (urinary && (normalized.equals("泌尿外科") || normalized.equals("肾内科"))) {
+                departments.add(normalized);
+                continue;
+            }
+            if (pregnancy && normalized.equals("妇产科")) {
+                departments.add(normalized);
+                continue;
+            }
+            if (chest && normalized.equals("心内科")) {
+                departments.add(normalized);
+                continue;
+            }
+            if (chemo && (normalized.equals("肿瘤科") || normalized.equals("感染科"))) {
+                departments.add(normalized);
+            }
+        }
+        if (departments.isEmpty()) {
+            addFallbackDepartments(departments, text, chunks);
+        }
+        String reason = "Departments selected by primary symptom and patient evidence"
+                + (emergency ? "; emergency department added by activated red flag" : "; no emergency department without activated red flag");
+        return new DepartmentDecision(List.copyOf(departments), reason);
+    }
+
+    private void addFallbackDepartments(LinkedHashSet<String> departments, String text, List<RagChunk> chunks) {
+        if (containsAny(text, "腹痛", "腹胀", "肚")) {
+            departments.add("消化内科");
+            return;
+        }
+        if (containsAny(text, "胸痛", "胸闷")) {
+            departments.add("心内科");
+            return;
+        }
+        if (containsAny(text, "咳嗽", "咳痰", "喘")) {
+            departments.add("呼吸内科");
+            return;
+        }
+        if (chunks != null) {
+            for (RagChunk chunk : chunks) {
+                if (chunk != null && chunk.relatedDepartments() != null) {
+                    splitAndAdd(departments, chunk.relatedDepartments(), 2);
+                    if (!departments.isEmpty()) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private String value(String value) {
+        return value == null ? "" : value;
+    }
+
+    private boolean hasPregnancyEvidence(String text) {
+        if (containsAny(text, "男性", "男", "未孕", "没有怀孕", "否认怀孕", "非孕")) {
+            return false;
+        }
+        return containsAny(text, "怀孕", "孕妇", "孕期", "孕周", "产后", "胎动", "孕产妇");
+    }
+
+    private record RulePattern(String name, List<String> ruleKeywords, List<String> positiveKeywords, List<String> negativeKeywords) {
+        boolean matchesRule(String text) {
+            return containsAny(text, ruleKeywords);
+        }
+
+        boolean hasPositiveEvidence(String text) {
+            return containsAny(text, positiveKeywords);
+        }
+
+        boolean hasNegativeEvidence(String text) {
+            return containsAny(text, negativeKeywords);
+        }
+
+        private boolean containsAny(String text, List<String> keywords) {
+            if (text == null || text.isBlank()) {
+                return false;
+            }
+            for (String keyword : keywords) {
+                if (text.contains(keyword)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private record RedFlagDecision(
+            List<String> activatedRedFlags,
+            List<String> inactiveRedFlags,
+            List<String> activationEvidence,
+            String reason
+    ) {
+    }
+
+    private record DepartmentDecision(List<String> departments, String reason) {
     }
 
     private void addAll(LinkedHashSet<String> target, List<String> values, int limit) {

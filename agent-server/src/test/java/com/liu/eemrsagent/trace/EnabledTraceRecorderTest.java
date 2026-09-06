@@ -5,7 +5,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,7 +71,74 @@ class EnabledTraceRecorderTest {
         }
     }
 
-    private AgentTraceRecorder recorder(TraceRepository repository) {
+    @Test
+    void concurrentRunsKeepIndependentSequences() throws Exception {
+        InMemoryTraceRepository repository = new InMemoryTraceRepository();
+        EnabledTraceRecorder recorder = recorder(repository);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        executor.submit(() -> recordManySteps(recorder, "session-a", "user-a", start, 20));
+        executor.submit(() -> recordManySteps(recorder, "session-b", "user-b", start, 20));
+        start.countDown();
+        executor.shutdown();
+
+        assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(sequencesFor(repository, repository.runs.get(0).runId())).containsExactlyElementsOf(range(1, 20));
+        assertThat(sequencesFor(repository, repository.runs.get(1).runId())).containsExactlyElementsOf(range(1, 20));
+        assertThat(recorder.activeSequenceCountForTest()).isZero();
+    }
+
+    @Test
+    void sameRunMultiThreadedStepsGetUniqueSequences() throws Exception {
+        InMemoryTraceRepository repository = new InMemoryTraceRepository();
+        EnabledTraceRecorder recorder = recorder(repository);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        try (TraceRunScope run = recorder.startRun(new TraceRunStart("shared-session", "u1", "agent", "deep", "p1", "rag1", null, null))) {
+            TraceContext.State state = TraceContext.current().orElseThrow();
+            for (int i = 0; i < 40; i++) {
+                executor.submit(() -> {
+                    try (TraceContext.Scope ignored = TraceContext.open(state)) {
+                        try (TraceStepScope step = recorder.startStep(TraceStepType.USER_INPUT, "parallel", null, null)) {
+                            step.success("ok");
+                        }
+                    }
+                });
+            }
+            executor.shutdown();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+            run.success("final", null, null, null);
+        }
+
+        assertThat(sequencesFor(repository, repository.runs.get(0).runId())).containsExactlyElementsOf(range(1, 40));
+        assertThat(recorder.activeSequenceCountForTest()).isZero();
+    }
+
+    @Test
+    void failedRunCleansSequenceState() {
+        InMemoryTraceRepository repository = new InMemoryTraceRepository();
+        EnabledTraceRecorder recorder = recorder(repository);
+
+        try (TraceRunScope run = recorder.startRun(new TraceRunStart("s1", "u1", "agent", "deep", "p1", "rag1", null, null))) {
+            run.fail("ERR", "failed");
+        }
+
+        assertThat(recorder.activeSequenceCountForTest()).isZero();
+    }
+
+    @Test
+    void defaultTracePayloadsKeepMedicalTextOutOfStorage() {
+        TraceProperties properties = new TraceProperties();
+        TracePayloads payloads = new TracePayloads(new ObjectMapper(), properties, new TraceRedactor());
+
+        assertThat(payloads.payload("胸痛三天，手机13812345678，Authorization: Bearer secret-token")).isNull();
+        assertThat(payloads.summary("胸痛三天，手机13812345678，Authorization: Bearer secret-token"))
+                .doesNotContain("13812345678")
+                .doesNotContain("secret-token");
+    }
+
+    private EnabledTraceRecorder recorder(TraceRepository repository) {
         TraceProperties properties = new TraceProperties();
         properties.setPayloadEnabled(true);
         return new EnabledTraceRecorder(
@@ -77,10 +149,42 @@ class EnabledTraceRecorderTest {
         );
     }
 
+    private void recordManySteps(EnabledTraceRecorder recorder, String sessionId, String userId, CountDownLatch start, int count) {
+        try {
+            start.await();
+            try (TraceRunScope run = recorder.startRun(new TraceRunStart(sessionId, userId, "agent", "deep", "p1", "rag1", null, null))) {
+                for (int i = 0; i < count; i++) {
+                    try (TraceStepScope step = recorder.startStep(TraceStepType.USER_INPUT, "input", null, null)) {
+                        step.success("ok");
+                    }
+                }
+                run.success("final", null, null, null);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private List<Integer> sequencesFor(InMemoryTraceRepository repository, String runId) {
+        return repository.steps.stream()
+                .filter(step -> step.runId().equals(runId))
+                .map(AgentStepRecord::sequenceNo)
+                .sorted()
+                .toList();
+    }
+
+    private List<Integer> range(int start, int endInclusive) {
+        List<Integer> values = new ArrayList<>();
+        for (int i = start; i <= endInclusive; i++) {
+            values.add(i);
+        }
+        return values;
+    }
+
     private static class InMemoryTraceRepository implements TraceRepository {
-        List<AgentRunRecord> runs = new ArrayList<>();
-        List<AgentStepRecord> steps = new ArrayList<>();
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
+        List<AgentRunRecord> runs = Collections.synchronizedList(new ArrayList<>());
+        List<AgentStepRecord> steps = Collections.synchronizedList(new ArrayList<>());
+        List<ToolCallRecord> toolCalls = Collections.synchronizedList(new ArrayList<>());
         String runStatus;
         String stepStatus;
         String toolStatus;
@@ -131,6 +235,16 @@ class EnabledTraceRecorderTest {
         @Override
         public AgentRunRecord findRun(String runId) {
             return runs.isEmpty() ? null : runs.get(0);
+        }
+
+        @Override
+        public AgentRunRecord findLatestRunByRequestId(String requestId) {
+            return runs.isEmpty() ? null : runs.get(0);
+        }
+
+        @Override
+        public List<AgentRunRecord> findRunsByRequestId(String requestId) {
+            return runs;
         }
 
         @Override

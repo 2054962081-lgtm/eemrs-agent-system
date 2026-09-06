@@ -14,17 +14,16 @@ agent:
   trace:
     enabled: ${AGENT_TRACE_ENABLED:true}
     persistence-enabled: ${AGENT_TRACE_PERSISTENCE_ENABLED:true}
+    query-api-enabled: ${AGENT_TRACE_QUERY_API_ENABLED:${AGENT_EVAL_FIXTURES_ENABLED:false}}
+    content-capture-level: ${AGENT_TRACE_CONTENT_CAPTURE_LEVEL:METADATA_ONLY}
     payload-enabled: ${AGENT_TRACE_PAYLOAD_ENABLED:false}
     payload-max-length: ${AGENT_TRACE_PAYLOAD_MAX_LENGTH:4000}
     summary-max-length: ${AGENT_TRACE_SUMMARY_MAX_LENGTH:1000}
-    async-enabled: ${AGENT_TRACE_ASYNC_ENABLED:true}
-    retention-days: ${AGENT_TRACE_RETENTION_DAYS:30}
     user-hash-salt: ${AGENT_TRACE_HASH_SALT:}
-    cost:
-      enabled: ${AGENT_TRACE_COST_ENABLED:false}
-      currency: ${AGENT_TRACE_COST_CURRENCY:CNY}
-      config-version: ${AGENT_TRACE_COST_CONFIG_VERSION:v1}
-      models: {}
+  report-trend:
+    stable-change-threshold-percent: ${REPORT_TREND_STABLE_CHANGE_THRESHOLD_PERCENT:10}
+  eval-fixtures:
+    enabled: ${AGENT_EVAL_FIXTURES_ENABLED:false}
 
 llm:
   default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}

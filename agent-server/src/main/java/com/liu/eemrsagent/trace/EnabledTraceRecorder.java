@@ -4,6 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class EnabledTraceRecorder implements AgentTraceRecorder {
@@ -15,7 +19,7 @@ public class EnabledTraceRecorder implements AgentTraceRecorder {
     private final TraceProperties properties;
     private final TracePayloads payloads;
     private final TraceRedactor redactor;
-    private final AtomicInteger sequence = new AtomicInteger(0);
+    private final ConcurrentMap<String, AtomicInteger> runSequences = new ConcurrentHashMap<>();
 
     public EnabledTraceRecorder(TraceRepository repository, TraceProperties properties, TracePayloads payloads, TraceRedactor redactor) {
         this.repository = repository;
@@ -34,17 +38,20 @@ public class EnabledTraceRecorder implements AgentTraceRecorder {
                 start.sessionId() == null ? incoming.sessionId() : start.sessionId(),
                 null,
                 userHash,
-                start.agentName() == null || start.agentName().isBlank() ? "deep-preconsultation-agent" : start.agentName()
+                start.agentName() == null || start.agentName().isBlank() ? "deep-preconsultation-agent" : start.agentName(),
+                incoming.evalRunId(),
+                incoming.evalCaseId(),
+                incoming.requestId()
         );
         TraceContext.set(state);
-        sequence.set(0);
+        runSequences.putIfAbsent(state.runId(), new AtomicInteger(0));
         runSafely(() -> {
             if (properties.isPersistenceEnabled()) {
                 repository.insertRun(new AgentRunRecord(
                         null, SCHEMA_VERSION, state.traceId(), state.runId(), state.sessionId(), state.userIdHash(),
                         state.agentName(), start.requestType(), start.promptVersion(), start.ragVersion(), start.modelName(),
                         TraceStatus.RUNNING.name(), LocalDateTime.now(), null, null, null, null, null, null, null,
-                        null, null, null, null, payloads.metadata(start.metadata()), null, null));
+                        null, null, null, null, payloads.metadata(runMetadata(start.metadata(), state)), null, null));
             }
         });
         return new TraceRunScope(this, state, System.nanoTime(), false);
@@ -56,7 +63,9 @@ public class EnabledTraceRecorder implements AgentTraceRecorder {
         String stepId = TraceIds.newStepId();
         String parentStepId = state.currentStepId();
         TraceContext.withStep(stepId);
-        int sequenceNo = sequence.incrementAndGet();
+        int sequenceNo = runSequences
+                .computeIfAbsent(state.runId(), ignored -> new AtomicInteger(0))
+                .incrementAndGet();
         runSafely(() -> {
             if (properties.isPersistenceEnabled()) {
                 String inputSummary = payloads.summary(input);
@@ -97,21 +106,25 @@ public class EnabledTraceRecorder implements AgentTraceRecorder {
     }
 
     void finishRun(TraceContext.State state, long startNanos, TraceStatus status, TraceStepData data, String errorCode, String errorMessage) {
-        runSafely(() -> {
-            if (properties.isPersistenceEnabled()) {
-                repository.updateRunFinished(
-                        state.runId(),
-                        status.name(),
-                        elapsedMs(startNanos),
-                        data == null ? null : data.promptTokens(),
-                        data == null ? null : data.completionTokens(),
-                        data == null ? null : data.totalTokens(),
-                        data == null ? null : payloads.summary(data.output()),
-                        errorCode,
-                        payloads.summary(errorMessage)
-                );
-            }
-        });
+        try {
+            runSafely(() -> {
+                if (properties.isPersistenceEnabled()) {
+                    repository.updateRunFinished(
+                            state.runId(),
+                            status.name(),
+                            elapsedMs(startNanos),
+                            data == null ? null : data.promptTokens(),
+                            data == null ? null : data.completionTokens(),
+                            data == null ? null : data.totalTokens(),
+                            data == null ? null : payloads.summary(data.output()),
+                            errorCode,
+                            payloads.summary(errorMessage)
+                    );
+                }
+            });
+        } finally {
+            runSequences.remove(state.runId());
+        }
     }
 
     void updateRunModel(String runId, String modelName) {
@@ -172,5 +185,32 @@ public class EnabledTraceRecorder implements AgentTraceRecorder {
 
     private long elapsedMs(long startNanos) {
         return (System.nanoTime() - startNanos) / 1_000_000;
+    }
+
+    private Object runMetadata(Object metadata, TraceContext.State state) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (metadata instanceof Map<?, ?> source) {
+            for (Map.Entry<?, ?> entry : source.entrySet()) {
+                if (entry.getKey() != null) {
+                    merged.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+        } else if (metadata != null) {
+            merged.put("metadata", metadata);
+        }
+        if (state.evalRunId() != null) {
+            merged.put("eval_run_id", state.evalRunId());
+        }
+        if (state.evalCaseId() != null) {
+            merged.put("eval_case_id", state.evalCaseId());
+        }
+        if (state.requestId() != null) {
+            merged.put("request_id", state.requestId());
+        }
+        return merged;
+    }
+
+    int activeSequenceCountForTest() {
+        return runSequences.size();
     }
 }

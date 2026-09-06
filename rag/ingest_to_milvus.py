@@ -52,25 +52,25 @@ def main() -> int:
             return 1
         built = build_chunks(validation.documents)
     except Exception as exc:
-        print(f"鍏ュ簱鍓嶅鐞嗗け璐? {exc}", file=sys.stderr)
+        print(f"入库前处理失败: {exc}", file=sys.stderr)
         return 2
 
     chunk_ids = [chunk["chunk_id"] for chunk in built.chunks]
     duplicate_chunk_count = len(chunk_ids) - len(set(chunk_ids))
     if duplicate_chunk_count:
-        print(f"鍙戠幇閲嶅 chunk_id 鏁伴噺: {duplicate_chunk_count}锛屽仠姝㈠叆搴撱€?, file=sys.stderr)
+        print(f"发现重复 chunk_id 数量: {duplicate_chunk_count}，停止入库。", file=sys.stderr)
         return 2
 
-    print(f"chunk 鎬绘暟: {len(built.chunks)}")
-    print("姣忕被 doc_type chunk 鏁伴噺:")
+    print(f"chunk 总数: {len(built.chunks)}")
+    print("每类 doc_type chunk 数量:")
     for doc_type, count in sorted(built.doc_type_counts.items()):
         print(f"- {doc_type}: {count}")
 
     if args.dry_run:
-        print("dry-run 宸查€氳繃锛氬彧瀹屾垚鏍￠獙鍜?chunk 鏋勫缓锛屾湭鍔犺浇 embedding锛屾湭杩炴帴 Milvus锛屾湭鍐欏叆鏁版嵁銆?)
-        print(f"embedding 妯″瀷閰嶇疆: {EMBEDDING_MODEL_NAME}")
-        print("Milvus 鏁版嵁瀹為檯钀界洏浣嶇疆鍙栧喅浜?docker-compose.yml 鐨?volumes 閰嶇疆銆?)
-        print(f"鑰楁椂: {time.time() - start:.2f}s")
+        print("dry-run 已通过：只完成校验和 chunk 构建，未加载 embedding，未连接 Milvus，未写入数据。")
+        print(f"embedding 模型配置: {EMBEDDING_MODEL_NAME}")
+        print("Milvus 数据实际落盘位置取决于 docker-compose.yml 的 volumes 配置。")
+        print(f"耗时: {time.time() - start:.2f}s")
         return 0
 
     try:
@@ -82,7 +82,7 @@ def main() -> int:
         existing = milvus.existing_chunk_ids(chunk_ids)
         if existing:
             print(
-                f"collection 涓凡瀛樺湪 {len(existing)} 涓?chunk_id锛岃浣跨敤 --reset 閲嶅缓鍚庡啀鍏ュ簱銆傜ず渚? "
+                f"collection 中已存在 {len(existing)} 个 chunk_id，请使用 --reset 重建后再入库。示例: "
                 f"python -m rag.ingest_to_milvus --reset",
                 file=sys.stderr,
             )
@@ -104,28 +104,28 @@ def main() -> int:
                 inserted += milvus.insert(rows)
             except Exception as exc:
                 failed += len(rows)
-                print(f"鎵归噺鎻掑叆澶辫触: {exc}", file=sys.stderr)
+                print(f"批量插入失败: {exc}", file=sys.stderr)
                 raise
         milvus.flush_and_load()
     except Exception as exc:
-        print(f"Milvus 鍏ュ簱澶辫触: {exc}", file=sys.stderr)
+        print(f"Milvus 入库失败: {exc}", file=sys.stderr)
         return 4
 
     elapsed = time.time() - start
-    print("鍏ュ簱瀹屾垚")
-    print(f"JSON 鏂囦欢鎬绘暟: {validation.total_files}")
-    print(f"chunk 鎬绘暟: {len(built.chunks)}")
-    print(f"embedding 妯″瀷鍚嶇О: {provider.model_name}")
-    print(f"embedding 缁村害: {provider.embedding_dim}")
+    print("入库完成")
+    print(f"JSON 文件总数: {validation.total_files}")
+    print(f"chunk 总数: {len(built.chunks)}")
+    print(f"embedding 模型名称: {provider.model_name}")
+    print(f"embedding 维度: {provider.embedding_dim}")
     print(f"Milvus: {MILVUS_HOST}:{MILVUS_PORT}")
     print(f"collection: {args.collection}")
-    print(f"鎴愬姛鍐欏叆鏁伴噺: {inserted}")
-    print(f"澶辫触鏁伴噺: {failed}")
-    print("姣忕被 doc_type 鍐欏叆鏁伴噺:")
+    print(f"成功写入数量: {inserted}")
+    print(f"失败数量: {failed}")
+    print("每类 doc_type 写入数量:")
     for doc_type, count in sorted(Counter(row["doc_type"] for row in built.chunks).items()):
         print(f"- {doc_type}: {count}")
-    print("Milvus 鏁版嵁瀹為檯钀界洏浣嶇疆鍙栧喅浜?docker-compose.yml 鐨?volumes 閰嶇疆銆?)
-    print(f"鑰楁椂: {elapsed:.2f}s")
+    print("Milvus 数据实际落盘位置取决于 docker-compose.yml 的 volumes 配置。")
+    print(f"耗时: {elapsed:.2f}s")
     return 0
 
 

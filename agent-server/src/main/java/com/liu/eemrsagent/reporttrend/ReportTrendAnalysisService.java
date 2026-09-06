@@ -1,5 +1,6 @@
 package com.liu.eemrsagent.reporttrend;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.liu.eemrsagent.trace.AgentTraceRecorder;
 import com.liu.eemrsagent.trace.TraceRedactor;
 import com.liu.eemrsagent.trace.TraceRunScope;
@@ -90,7 +91,14 @@ public class ReportTrendAnalysisService {
                 List<TrendItem> trendItems = analyzeTrends(structuredReports, normalizedRequest.targetItems());
                 ReportTrendContext context = contextService.load(normalizedRequest);
                 Map<String, Object> cloudPayload = buildCloudPayload(normalizedRequest, structuredReports, trendItems, context);
-                CloudReportAnalysisClient.CloudResult cloudResult = callCloud(cloudPayload);
+                CloudReportAnalysisClient.CloudResult cloudResult;
+                try {
+                    cloudResult = callCloud(cloudPayload);
+                } catch (ReportTrendException e) {
+                    resultRepository.saveFailure(analysisId, request.patientId(), request.normalizedReportType(), e.errorCode(), e.getMessage(), run.runId());
+                    run.fail(e.errorCode().name(), e.getMessage());
+                    return ReportTrendAnalysisResponse.fail(analysisId, run.runId(), e.errorCode(), e.getMessage(), trendItems);
+                }
                 ReportTrendAnalysisResponse response = toResponse(analysisId, run.runId(), cloudResult.response(), trendItems, context.contextUsed());
                 storeSuccess(analysisId, normalizedRequest, structuredReports.size(), cloudPayload, response, cloudResult.modelName(), run.runId());
                 recordFinal(response, trendItems);
@@ -157,7 +165,17 @@ public class ReportTrendAnalysisService {
         try (TraceStepScope step = traceRecorder.startStep(TraceStepType.INDICATOR_NORMALIZE, "normalize indicators", null,
                 Map.of("report_count", reports.size()))) {
             int count = reports.stream().mapToInt(report -> report.items().size()).sum();
-            step.success(Map.of("indicator_count", count));
+            List<String> canonicalCodes = reports.stream()
+                    .flatMap(report -> report.items().stream())
+                    .map(LabIndicatorItem::standardCode)
+                    .filter(code -> code != null && !code.startsWith("UNKNOWN_"))
+                    .distinct()
+                    .toList();
+            step.success(Map.of(
+                    "indicator_count", count,
+                    "normalized_indicator_count", canonicalCodes.size(),
+                    "canonical_indicator_codes", canonicalCodes
+            ));
         }
         try (TraceStepScope step = traceRecorder.startStep(TraceStepType.ABNORMAL_DETECTION, "detect abnormal indicators", null, null)) {
             long abnormal = reports.stream().flatMap(report -> report.items().stream())
@@ -171,9 +189,30 @@ public class ReportTrendAnalysisService {
                 LinkedHashSet<String> targets = new LinkedHashSet<>(targetItems);
                 trends = trends.stream().filter(item -> targets.contains(item.code())).toList();
             }
-            step.success(Map.of("trend_item_count", trends.size()));
+            step.success(TraceStepData.of(null, trends.stream()
+                    .map(this::trendTracePayload)
+                    .toList(), Map.of(
+                    "trend_item_count", trends.size(),
+                    "canonical_indicator_codes", trends.stream().map(TrendItem::code).toList()
+            )));
             return trends;
         }
+    }
+
+    private Map<String, Object> trendTracePayload(TrendItem item) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("indicator_code", item.code());
+        out.put("indicator_name", item.name());
+        out.put("unit", item.unit());
+        out.put("point_count", item.pointCount());
+        out.put("first_date", item.firstDate());
+        out.put("latest_date", item.latestDate());
+        out.put("first_value", item.firstValue());
+        out.put("latest_value", item.latestValue());
+        out.put("change_absolute", item.changeAbsolute());
+        out.put("change_percent", item.changePercent());
+        out.put("trend_direction", item.trendDirection());
+        return out;
     }
 
     private Map<String, Object> buildCloudPayload(ReportTrendAnalysisRequest request, List<StructuredLabReport> reports,
@@ -191,18 +230,69 @@ public class ReportTrendAnalysisService {
     }
 
     private CloudReportAnalysisClient.CloudResult callCloud(Map<String, Object> payload) {
+        CloudReportAnalysisClient.RawCloudResult raw;
         try (TraceStepScope step = traceRecorder.startStep(TraceStepType.CLOUD_MODEL_REQUEST, "call cloud model", null,
                 Map.of("payload_hash", traceRedactor.stableHash(payload.toString())))) {
-            CloudReportAnalysisClient.CloudResult result = cloudClient.analyze(payload);
-            step.success(new TraceStepData(null, Map.of("response_hash", traceRedactor.stableHash(result.response().toString()), "model_name", result.modelName()),
-                    Map.of("model_name", result.modelName()), result.modelName(), null, result.promptTokens(), result.completionTokens(), result.totalTokens()));
-            try (TraceStepScope responseStep = traceRecorder.startStep(TraceStepType.CLOUD_MODEL_RESPONSE, "cloud model response metadata", null, null)) {
-                responseStep.success(Map.of("response_hash", traceRedactor.stableHash(result.response().toString()), "model_name", result.modelName()));
+            try {
+                raw = cloudClient.request(payload);
+                step.success(new TraceStepData(null, Map.of("response_hash", traceRedactor.stableHash(raw.content()), "model_name", safeModelName(raw.modelName())),
+                        Map.of("model_name", safeModelName(raw.modelName())), raw.modelName(), null, raw.promptTokens(), raw.completionTokens(), raw.totalTokens()));
+            } catch (ReportTrendException e) {
+                step.fail(e.errorCode().name(), e.getMessage());
+                throw e;
             }
-            try (TraceStepScope validateStep = traceRecorder.startStep(TraceStepType.CLOUD_RESPONSE_VALIDATE, "validate cloud json response", null, null)) {
-                validateStep.success(Map.of("doctor_summary_present", true, "patient_explanation_present", true));
+        }
+        JsonNode parsed = parseCloudResponse(raw);
+        CloudReportResponse response = validateCloudResponse(parsed);
+        return new CloudReportAnalysisClient.CloudResult(response, raw.modelName(), raw.promptTokens(), raw.completionTokens(), raw.totalTokens());
+    }
+
+    private JsonNode parseCloudResponse(CloudReportAnalysisClient.RawCloudResult raw) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.CLOUD_RESPONSE_PARSE, "parse cloud json response", null,
+                Map.of("model_name", safeModelName(raw.modelName()), "raw_response_hash", traceRedactor.stableHash(raw.content())))) {
+            try {
+                JsonNode response = cloudClient.parseJson(raw.content());
+                step.success(Map.of("json_syntax_valid", true));
+                return response;
+            } catch (ReportTrendException e) {
+                step.fail(e.errorCode().name(), e.getMessage());
+                throw e;
             }
-            return result;
+        }
+    }
+
+    private String safeModelName(String modelName) {
+        return modelName == null || modelName.isBlank() ? "UNKNOWN" : modelName;
+    }
+
+    private CloudReportResponse validateCloudResponse(JsonNode json) {
+        try (TraceStepScope step = traceRecorder.startStep(TraceStepType.CLOUD_SCHEMA_VALIDATE, "validate cloud response schema", null, null)) {
+            CloudReportResponse response;
+            try {
+                response = cloudClient.toResponse(json);
+            } catch (ReportTrendException e) {
+                step.fail(e.errorCode().name(), e.getMessage());
+                throw e;
+            }
+            boolean contextLinksValid = response.contextLinks() == null || response.contextLinks().stream().allMatch(link -> link != null);
+            boolean riskNotesValid = response.riskNotes() == null || response.riskNotes().stream().allMatch(note -> note != null);
+            boolean summariesPresent = response.doctorSummary() != null && !response.doctorSummary().isBlank()
+                    && response.patientExplanation() != null && !response.patientExplanation().isBlank();
+            if (!summariesPresent || !contextLinksValid || !riskNotesValid) {
+                ReportTrendException exception = new ReportTrendException(
+                        ReportTrendErrorCode.CLOUD_RESPONSE_SCHEMA_MISMATCH,
+                        "Cloud response schema mismatch"
+                );
+                step.fail(exception.errorCode().name(), exception.getMessage());
+                throw exception;
+            }
+            step.success(Map.of(
+                    "doctor_summary_present", true,
+                    "patient_explanation_present", true,
+                    "context_links_type", "array",
+                    "risk_notes_type", "array"
+            ));
+            return response;
         }
     }
 
